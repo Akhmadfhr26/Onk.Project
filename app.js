@@ -24,6 +24,8 @@ var dashboardDimuat = false;
 var obatDatalistDimuat = false;
 var modeGrafikPasienAktif = 'bulan';
 var currentObatList = [];
+var pasienListTerakhirTertunda = [];
+var currentStokRows = [];
 
 // cache: seluruh jadwal (schedules + items + nama pasien), dimuat sekali per sesi
 // lalu dipakai ulang oleh semua tab. dimuat ulang (invalidate) setelah ada perubahan data.
@@ -156,12 +158,18 @@ function switchTab(nama) {
     document.getElementById('tabBtn' + capitalize(t)).classList.toggle('active', nama === t);
   });
 
-  if (nama === 'rentang' && !document.getElementById('rentangMulai').value) {
-    var hariIni = new Date();
-    var seminggu = new Date();
-    seminggu.setDate(seminggu.getDate() - 6);
-    document.getElementById('rentangMulai').value = toIsoDate(seminggu);
-    document.getElementById('rentangAkhir').value = toIsoDate(hariIni);
+  if (nama === 'rentang') {
+    if (!document.getElementById('rentangMulai').value) {
+      var hariIni = new Date();
+      var seminggu = new Date();
+      seminggu.setDate(seminggu.getDate() - 6);
+      document.getElementById('rentangMulai').value = toIsoDate(seminggu);
+      document.getElementById('rentangAkhir').value = toIsoDate(hariIni);
+    }
+    if (currentStokRows.length === 0) {
+      currentStokRows = [{ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' }];
+      renderStokRowsTable();
+    }
   }
   if (nama === 'riwayat' && !patientListDimuat) muatDaftarPasien();
   if (nama === 'tertunda' && !tertundaDimuat) muatPasienTertunda();
@@ -424,7 +432,7 @@ function hapusJadwalTanggal(i) {
 }
 
 // =====================================================================
-// TAB 2: RENTANG TANGGAL
+// TAB 2: RENTANG TANGGAL (+ Stok Masuk & Kebutuhan vs Stok)
 // =====================================================================
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
@@ -437,7 +445,12 @@ function muatKebutuhanRentang() {
   document.getElementById('ringkasanRentang').innerHTML = '';
   document.getElementById('contentRentang').innerHTML = '';
 
-  loadAllSchedules().then(function (list) {
+  Promise.all([
+    loadAllSchedules(),
+    sb.from('stock_entries').select('obat, jumlah')
+  ]).then(function (results) {
+    var list = results[0];
+    var stokRes = results[1];
     document.getElementById('loadingRentang').style.display = 'none';
     var mulai = new Date(isoMulai + 'T00:00:00');
     var akhir = new Date(isoAkhir + 'T00:00:00');
@@ -456,9 +469,25 @@ function muatKebutuhanRentang() {
         groups[key].pasienSet[s.nama] = true;
       });
     });
+
+    var stokMap = {};
+    if (stokRes && !stokRes.error && stokRes.data) {
+      stokRes.data.forEach(function (row) {
+        var key = (row.obat || '').toLowerCase();
+        stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+      });
+    }
+
     var items = Object.keys(groups).map(function (k) {
       var g = groups[k];
-      return { obat: g.obat, totalJumlah: g.totalJumlah, pasienList: Object.keys(g.pasienSet) };
+      var stokTersedia = stokMap[k] || 0;
+      return {
+        obat: g.obat,
+        totalJumlah: g.totalJumlah,
+        pasienList: Object.keys(g.pasienSet),
+        stok: stokTersedia,
+        selisih: stokTersedia - g.totalJumlah
+      };
     }).sort(function (a, b) { return a.obat.localeCompare(b.obat); });
 
     renderRentang({
@@ -478,8 +507,17 @@ function renderRentang(detail) {
   }
   document.getElementById('ringkasanRentang').innerHTML = detail.tanggalMulai + ' &ndash; ' + detail.tanggalAkhir + ': ' + detail.totalPasien + ' pasien, ' + detail.totalHariAdaJadwal + ' hari ada jadwal';
 
-  var html = '<div class="total-section"><h2>Total Kebutuhan Obat</h2>';
-  detail.items.forEach(function (item) { html += '<div class="total-item"><span>' + escapeHtml(item.obat) + '</span><span>' + item.totalJumlah + '</span></div>'; });
+  var html = '<div class="total-section"><h2>Kebutuhan Obat vs Stok</h2>';
+  detail.items.forEach(function (item) {
+    var kurang = item.selisih < 0;
+    var warna = kurang ? 'var(--danger)' : 'var(--success)';
+    html += '<div class="total-item" style="align-items:center;">' +
+      '<span>' + escapeHtml(item.obat) + '</span>' +
+      '<span style="text-align:right;">Butuh ' + item.totalJumlah + ' &middot; Stok ' + item.stok +
+      ' &middot; <span style="color:' + warna + '; font-weight:700;">' +
+      (kurang ? ('Kurang ' + Math.abs(item.selisih) + ' (pesan)') : ('Sisa +' + item.selisih)) +
+      '</span></span></div>';
+  });
   html += '</div><div style="margin-top:16px;">';
   detail.items.forEach(function (item) {
     html += '<div class="card"><div class="nama" style="font-size:14px;">' + escapeHtml(item.obat) + '</div>' +
@@ -487,6 +525,71 @@ function renderRentang(detail) {
   });
   html += '</div>';
   document.getElementById('contentRentang').innerHTML = html;
+}
+
+function tambahBarisStokKosong() {
+  currentStokRows.push({ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' });
+  renderStokRowsTable();
+}
+function hapusBarisStok(i) {
+  currentStokRows.splice(i, 1);
+  renderStokRowsTable();
+}
+function renderStokRowsTable() {
+  var container = document.getElementById('stokRowsContainer');
+  if (!container) return;
+  var html = '';
+  currentStokRows.forEach(function (item, i) {
+    html += '<div class="obat-row">' +
+      '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
+      '<input type="date" data-i="' + i + '" data-f="tanggal" style="flex:1;" value="' + escapeHtml(item.tanggal || '') + '">' +
+      '<input type="number" data-i="' + i + '" data-f="jumlah" placeholder="Jumlah" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
+      '<button type="button" onclick="hapusBarisStok(' + i + ')">×</button></div>';
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.obat-row input').forEach(function (inp) {
+    var handler = function () {
+      var i = parseInt(this.getAttribute('data-i'), 10);
+      var f = this.getAttribute('data-f');
+      currentStokRows[i][f] = this.value;
+    };
+    inp.addEventListener('input', handler);
+    inp.addEventListener('change', handler);
+  });
+}
+
+function submitStokMasuk() {
+  var statusEl = document.getElementById('stokMasukStatus');
+  statusEl.className = 'status-msg';
+  statusEl.textContent = '';
+
+  var valid = currentStokRows.filter(function (r) {
+    return (r.obat || '').trim() !== '' && r.tanggal && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) > 0;
+  });
+  if (valid.length === 0) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Isi minimal satu baris stok (obat, tanggal, jumlah > 0) dengan benar.';
+    return;
+  }
+
+  document.getElementById('stokMasukSubmitBtn').disabled = true;
+  statusEl.textContent = 'Menyimpan...';
+
+  var rows = valid.map(function (r) { return { obat: r.obat.trim(), tanggal: r.tanggal, jumlah: Number(r.jumlah) }; });
+
+  sb.from('stock_entries').insert(rows).then(function (res) {
+    document.getElementById('stokMasukSubmitBtn').disabled = false;
+    if (res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
+    statusEl.className = 'status-msg ok';
+    statusEl.textContent = 'Stok masuk tersimpan.';
+    currentStokRows = [{ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' }];
+    renderStokRowsTable();
+    if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
+  }).catch(function (err) {
+    document.getElementById('stokMasukSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Gagal: ' + err.message;
+  });
 }
 
 // =====================================================================
@@ -545,7 +648,7 @@ function renderRiwayat(nama, list) {
 }
 
 // =====================================================================
-// TAB 4: PASIEN TERTUNDA
+// TAB 4: PASIEN TERTUNDA (batalkan tunda / ubah jadwal / hapus)
 // =====================================================================
 function muatPasienTertunda() {
   document.getElementById('loadingTertunda').style.display = 'block';
@@ -567,7 +670,9 @@ function muatPasienTertunda() {
       });
     });
     var totalObat = Object.keys(totalGroups).map(function (k) { return totalGroups[k]; }).sort(function (a, b) { return a.obat.localeCompare(b.obat); });
-    var pasienList = tertunda.map(function (s) { return { nama: s.nama, tanggalAsal: s.tanggal, siklus: s.siklus, obatList: s.items }; });
+    var pasienList = tertunda.map(function (s) {
+      return { id: s.id, nama: s.nama, tanggalAsal: s.tanggal, siklus: s.siklus, obatList: s.items };
+    });
 
     renderTertunda({ pasienList: pasienList, totalObat: totalObat });
   }).catch(function (err) {
@@ -577,23 +682,111 @@ function muatPasienTertunda() {
 }
 
 function renderTertunda(detail) {
+  pasienListTerakhirTertunda = detail.pasienList;
+
   if (!detail.pasienList || detail.pasienList.length === 0) {
     document.getElementById('ringkasanTertunda').innerHTML = 'Tidak ada pasien yang berstatus Tertunda saat ini. 👍';
     return;
   }
   document.getElementById('ringkasanTertunda').innerHTML = detail.pasienList.length + ' pasien berstatus Tertunda';
   var html = '';
-  detail.pasienList.forEach(function (p) {
+  detail.pasienList.forEach(function (p, i) {
     html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
       '<span>' + escapeHtml(p.nama) + '</span>' + renderBadge('Tertunda') + '</div>' +
       '<div style="font-size:12px; color:#9AA8BE; margin-bottom:6px;">Jadwal asal: ' + p.tanggalAsal + ' (Siklus ' + escapeHtml(p.siklus) + ')</div>';
     p.obatList.forEach(function (o) { html += '<div class="obat-item"><span>' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>'; });
+
+    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
+    html += '<button type="button" onclick="batalkanTundaTertunda(' + i + ')" class="btn-neutral" style="flex:1;">Batalkan Tunda</button>';
+    html += '<button type="button" onclick="toggleUbahTanggalTertunda(' + i + ')" class="btn-accent" style="flex:1;">Ubah Jadwal</button>';
+    html += '<button type="button" onclick="hapusJadwalTertunda(' + i + ')" class="btn-danger" style="flex:1;">Hapus Jadwal</button>';
+    html += '</div>';
+
+    html += '<div id="ubahTanggalTertunda' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Baru</label>';
+    html += '<input type="date" id="tanggalBaruTertunda' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px;">';
+    html += '<input type="checkbox" id="hapusTundaSetelahUbah' + i + '" checked style="width:auto; margin:0;"> Hapus tanda tertunda setelah dijadwal ulang';
+    html += '</label>';
+    html += '<button type="button" onclick="simpanUbahTanggalTertunda(' + i + ')" class="btn-primary" style="margin-top:8px;">Simpan Tanggal Baru</button>';
+    html += '</div>';
+
     html += '</div>';
   });
   html += '<div class="total-section"><h2>Total Kebutuhan Obat (Jika Semua Dijadwalkan Ulang)</h2>';
   detail.totalObat.forEach(function (t) { html += '<div class="total-item"><span>' + escapeHtml(t.obat) + '</span><span>' + t.totalJumlah + '</span></div>'; });
   html += '</div>';
   document.getElementById('contentTertunda').innerHTML = html;
+}
+
+function batalkanTundaTertunda(i) {
+  var p = pasienListTerakhirTertunda[i];
+  if (!p) return;
+  document.getElementById('loadingTertunda').style.display = 'block';
+  document.getElementById('loadingTertunda').innerText = 'Membatalkan tanda...';
+
+  loadAllSchedules().then(function (list) {
+    var s = list.find(function (x) { return x.id === p.id; });
+    var ketLama = s ? s.keterangan : '';
+    var ketBaru = ketLama.replace(/tertunda\s*;?\s*/gi, '').replace(/;\s*$/, '').trim();
+    return sb.from('schedules').update({ keterangan: ketBaru }).eq('id', p.id);
+  }).then(function (res) {
+    if (res && res.error) throw res.error;
+    invalidateCacheAndReload();
+    muatPasienTertunda();
+  }).catch(function (err) {
+    document.getElementById('loadingTertunda').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function toggleUbahTanggalTertunda(i) {
+  var el = document.getElementById('ubahTanggalTertunda' + i);
+  el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+function simpanUbahTanggalTertunda(i) {
+  var p = pasienListTerakhirTertunda[i];
+  if (!p) return;
+  var iso = document.getElementById('tanggalBaruTertunda' + i).value;
+  if (!iso) { alert('Pilih tanggal baru terlebih dahulu.'); return; }
+  var hapusTunda = document.getElementById('hapusTundaSetelahUbah' + i).checked;
+
+  document.getElementById('loadingTertunda').style.display = 'block';
+  document.getElementById('loadingTertunda').innerText = 'Menyimpan perubahan...';
+
+  loadAllSchedules().then(function (list) {
+    var s = list.find(function (x) { return x.id === p.id; });
+    var ketBaru = s ? s.keterangan : '';
+    if (hapusTunda) ketBaru = ketBaru.replace(/tertunda\s*;?\s*/gi, '').replace(/;\s*$/, '').trim();
+    return sb.from('schedules').update({ tanggal: iso, keterangan: ketBaru }).eq('id', p.id);
+  }).then(function (res) {
+    if (res && res.error) throw res.error;
+    invalidateCacheAndReload();
+    muatPasienTertunda();
+  }).catch(function (err) {
+    document.getElementById('loadingTertunda').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function hapusJadwalTertunda(i) {
+  var p = pasienListTerakhirTertunda[i];
+  if (!p) return;
+  var konfirmasi = window.confirm('Yakin mau menghapus jadwal ' + p.nama + ' (Siklus ' + p.siklus + ') pada ' + p.tanggalAsal + '?\n\nTindakan ini tidak bisa dibatalkan.');
+  if (!konfirmasi) return;
+
+  document.getElementById('loadingTertunda').style.display = 'block';
+  document.getElementById('loadingTertunda').innerText = 'Menghapus...';
+
+  sb.from('schedules').delete().eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateCacheAndReload();
+    muatPasienTertunda();
+  }).catch(function (err) {
+    document.getElementById('loadingTertunda').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
 }
 
 // =====================================================================
