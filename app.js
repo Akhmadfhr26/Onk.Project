@@ -946,7 +946,7 @@ function muatPasienTertunda() {
     });
     var totalObat = Object.keys(totalGroups).map(function (k) { return totalGroups[k]; }).sort(function (a, b) { return a.obat.localeCompare(b.obat); });
     var pasienList = tertunda.map(function (s) {
-      return { id: s.id, nama: s.nama, tanggalAsal: s.tanggal, siklus: s.siklus, obatList: s.items };
+      return { id: s.id, patient_id: s.patient_id, nama: s.nama, tanggalAsal: s.tanggal, dateObj: s.dateObj, siklus: s.siklus, obatList: s.items };
     });
 
     renderTertunda({ pasienList: pasienList, totalObat: totalObat });
@@ -980,8 +980,11 @@ function renderTertunda(detail) {
     html += '<div id="ubahTanggalTertunda' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Baru</label>';
     html += '<input type="date" id="tanggalBaruTertunda' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
-    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px;">';
+    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:6px;">';
     html += '<input type="checkbox" id="hapusTundaSetelahUbah' + i + '" checked style="width:auto; margin:0;"> Hapus tanda tertunda setelah dijadwal ulang';
+    html += '</label>';
+    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px;">';
+    html += '<input type="checkbox" id="geserBerikutnyaTertunda' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, jadwal sebelumnya tidak berubah)';
     html += '</label>';
     html += '<button type="button" onclick="simpanUbahTanggalTertunda(' + i + ')" class="btn-primary" style="margin-top:8px;">Simpan Tanggal Baru</button>';
     html += '</div>';
@@ -1026,17 +1029,38 @@ function simpanUbahTanggalTertunda(i) {
   var iso = document.getElementById('tanggalBaruTertunda' + i).value;
   if (!iso) { alert('Pilih tanggal baru terlebih dahulu.'); return; }
   var hapusTunda = document.getElementById('hapusTundaSetelahUbah' + i).checked;
+  var geser = document.getElementById('geserBerikutnyaTertunda' + i).checked;
 
   document.getElementById('loadingTertunda').style.display = 'block';
   document.getElementById('loadingTertunda').innerText = 'Menyimpan perubahan...';
+
+  var tanggalLamaObj = dateOnly(p.dateObj);
+  var parts = iso.split('-');
+  var tanggalBaruObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  var deltaDays = Math.round((tanggalBaruObj.getTime() - tanggalLamaObj.getTime()) / 86400000);
 
   loadAllSchedules().then(function (list) {
     var s = list.find(function (x) { return x.id === p.id; });
     var ketBaru = s ? s.keterangan : '';
     if (hapusTunda) ketBaru = ketBaru.replace(/tertunda\s*;?\s*/gi, '').replace(/;\s*$/, '').trim();
-    return sb.from('schedules').update({ tanggal: iso, keterangan: ketBaru }).eq('id', p.id);
-  }).then(function (res) {
-    if (res && res.error) throw res.error;
+
+    var updates = [sb.from('schedules').update({ tanggal: iso, keterangan: ketBaru }).eq('id', p.id)];
+    if (geser && deltaDays !== 0) {
+      list.forEach(function (row) {
+        if (row.id === p.id) return;
+        if (row.patient_id !== p.patient_id) return;
+        // hanya geser jadwal yang tanggalnya SETELAH tanggal lama (siklus berikutnya);
+        // jadwal sebelumnya tidak disentuh sama sekali.
+        if (dateOnly(row.dateObj).getTime() > tanggalLamaObj.getTime()) {
+          var geseredDate = new Date(row.dateObj.getTime() + deltaDays * 86400000);
+          updates.push(sb.from('schedules').update({ tanggal: toIsoDate(geseredDate) }).eq('id', row.id));
+        }
+      });
+    }
+    return Promise.all(updates);
+  }).then(function (results) {
+    var failed = results.find(function (r) { return r.error; });
+    if (failed) throw failed.error;
     invalidateCacheAndReload();
     muatPasienTertunda();
   }).catch(function (err) {
