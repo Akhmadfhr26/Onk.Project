@@ -301,6 +301,16 @@
 
       <!-- ===== TAB 2: RENTANG ===== -->
       <div id="tabRentang" style="display:none">
+        <div class="card" style="margin-bottom:20px;">
+          <div class="nama" style="font-size:14px;">Tambah Stok Masuk</div>
+          <div id="stokRowsContainer"></div>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <button type="button" class="btn-secondary" onclick="tambahBarisStokKosong()">+ Tambah Baris Stok</button>
+            <button type="button" class="btn-primary" id="stokMasukSubmitBtn" onclick="submitStokMasuk()" style="max-width:200px; margin-bottom:0;">Simpan Stok Masuk</button>
+          </div>
+          <div class="status-msg" id="stokMasukStatus"></div>
+        </div>
+
         <div class="form-row-2">
           <div>
             <label class="field-label">Dari Tanggal</label>
