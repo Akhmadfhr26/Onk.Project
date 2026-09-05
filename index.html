@@ -189,7 +189,7 @@
   #loginScreen button.primary:disabled { opacity: 0.6; }
   #appScreen { display: none; }
 
-  /* Extra: obat row builder for Tambah tab */
+  /* Extra: obat row builder for Daftarkan Pasien tab */
   .obat-row { display: flex; gap: 6px; margin-bottom: 8px; }
   .obat-row input { margin-bottom: 0; }
   .obat-row input[data-f="obat"] { flex: 2; }
@@ -273,12 +273,12 @@
 
     <nav class="tabs">
       <button class="tab-btn active" id="tabBtnKalender" onclick="switchTab('kalender')">🗓️ Kalender</button>
-      <button class="tab-btn" id="tabBtnRentang" onclick="switchTab('rentang')">📊 Rentang</button>
+      <button class="tab-btn" id="tabBtnRentang" onclick="switchTab('rentang')">📊 Kebutuhan Obat</button>
       <button class="tab-btn" id="tabBtnRiwayat" onclick="switchTab('riwayat')">📋 Daftar Pasien</button>
       <button class="tab-btn" id="tabBtnTertunda" onclick="switchTab('tertunda')">⏸ Tertunda</button>
       <button class="tab-btn" id="tabBtnDashboard" onclick="switchTab('dashboard')">📈 Dashboard</button>
       <button class="tab-btn" id="tabBtnCariObat" onclick="switchTab('cariobat')">💊 Cari Obat</button>
-      <button class="tab-btn" id="tabBtnTambah" onclick="switchTab('tambah')">➕ Tambah</button>
+      <button class="tab-btn" id="tabBtnTambah" onclick="switchTab('tambah')">➕ Daftarkan Pasien</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -316,7 +316,7 @@
         <div id="kalDetailContainer"></div>
       </div>
 
-      <!-- ===== TAB 2: RENTANG ===== -->
+      <!-- ===== TAB 2: KEBUTUHAN OBAT (dulu "Rentang") ===== -->
       <div id="tabRentang" style="display:none">
         <div class="card" style="margin-bottom:20px;">
           <div class="nama" style="font-size:14px;">Tambah Stok Masuk</div>
@@ -417,7 +417,7 @@
         <div id="contentCariObat"></div>
       </div>
 
-      <!-- ===== TAB 7: TAMBAH JADWAL ===== -->
+      <!-- ===== TAB 7: DAFTARKAN PASIEN (dulu "Tambah Jadwal Baru") ===== -->
       <div id="tabTambah" style="display:none">
         <label class="field-label">Nama Pasien</label>
         <input type="text" id="tambahPatientSelect" list="patientDatalistTambah" placeholder="Ketik nama pasien (baru atau lama)..." autocomplete="off">
