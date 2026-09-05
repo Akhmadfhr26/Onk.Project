@@ -37,6 +37,10 @@ var currentObatListRiwayat = [];
 // lalu dipakai ulang oleh semua tab. dimuat ulang (invalidate) setelah ada perubahan data.
 var allSchedulesCache = null;
 
+// cache: daftar nama obat unik (dipakai bersama oleh datalist di tab Kebutuhan Obat,
+// Daftarkan Pasien, Daftar Pasien, dan Cari Obat) agar nama obat konsisten & tidak double.
+var daftarNamaObatSharedCache = null;
+
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function formatTampilan(d) { return NAMA_HARI[d.getDay()] + ', ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
 function formatDDMMYYYY(d) { return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
@@ -157,6 +161,7 @@ function loadAllSchedules(forceReload) {
 
 function invalidateCacheAndReload() {
   allSchedulesCache = null;
+  daftarNamaObatSharedCache = null;
   patientListDimuat = false;
   tertundaDimuat = false;
   dashboardDimuat = false;
@@ -164,8 +169,39 @@ function invalidateCacheAndReload() {
 }
 
 // =====================================================================
+// DAFTAR NAMA OBAT — sumber tunggal untuk semua datalist di seluruh tab,
+// supaya nama obat yang muncul saat mengetik selalu konsisten dan tidak
+// membuat entri ganda karena variasi penulisan.
+// =====================================================================
+function muatDaftarNamaObat(forceReload) {
+  if (daftarNamaObatSharedCache && !forceReload) return Promise.resolve(daftarNamaObatSharedCache);
+  return loadAllSchedules().then(function (list) {
+    var namaObatSet = {};
+    list.forEach(function (s) {
+      s.items.forEach(function (it) { if (it.obat) namaObatSet[it.obat] = true; });
+    });
+    var sorted = Object.keys(namaObatSet).sort();
+    daftarNamaObatSharedCache = sorted;
+    return sorted;
+  });
+}
+
+function isiDatalistObat(idDatalist) {
+  return muatDaftarNamaObat().then(function (namaList) {
+    var dl = document.getElementById(idDatalist);
+    if (!dl) return;
+    dl.innerHTML = '';
+    namaList.forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o;
+      dl.appendChild(opt);
+    });
+  });
+}
+
+// =====================================================================
 // Simpan beberapa siklus jadwal sekaligus — dipakai bersama oleh tab
-// "Tambah" dan form Tambah Jadwal Baru di dalam tab "Daftar Pasien".
+// "Daftarkan Pasien" dan form Tambah Jadwal Baru di dalam tab "Daftar Pasien".
 // =====================================================================
 function simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklusAkhir, interval, obatValid) {
   var siklusAwalNum = parseInt(siklusAwal, 10);
@@ -218,6 +254,7 @@ function switchTab(nama) {
       currentStokRows = [{ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' }];
       renderStokRowsTable();
     }
+    isiDatalistObat('daftarObatDatalistTambah');
   }
   if (nama === 'riwayat' && !patientListDimuat) muatDaftarPasien();
   if (nama === 'tertunda' && !tertundaDimuat) muatPasienTertunda();
@@ -480,7 +517,7 @@ function hapusJadwalTanggal(i) {
 }
 
 // =====================================================================
-// TAB 2: RENTANG TANGGAL (+ Stok Masuk & Kebutuhan vs Stok)
+// TAB 2: KEBUTUHAN OBAT (dulu "Rentang Tanggal") — + Stok Masuk & Kebutuhan vs Stok
 // =====================================================================
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
@@ -632,6 +669,8 @@ function submitStokMasuk() {
     statusEl.textContent = 'Stok masuk tersimpan.';
     currentStokRows = [{ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' }];
     renderStokRowsTable();
+    invalidateCacheAndReload();
+    isiDatalistObat('daftarObatDatalistTambah');
     if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
   }).catch(function (err) {
     document.getElementById('stokMasukSubmitBtn').disabled = false;
@@ -836,6 +875,7 @@ function siapkanFormTambahRiwayat(nama, mineSortedAsc) {
   document.getElementById('riwayatTambahTanggal').value = '';
   document.getElementById('riwayatTambahSiklusAkhir').value = '';
   document.getElementById('riwayatTambahInterval').value = '';
+  isiDatalistObat('daftarObatDatalistTambah');
 
   if (!mineSortedAsc || mineSortedAsc.length === 0) {
     document.getElementById('riwayatTambahSiklusAwal').value = '1';
@@ -1263,17 +1303,8 @@ function renderGrafikPasien(data) {
 // TAB 6: CARI OBAT
 // =====================================================================
 function muatDaftarObatUntukPencarian() {
-  loadAllSchedules().then(function (list) {
+  isiDatalistObat('daftarObatDatalistMobile').then(function () {
     obatDatalistDimuat = true;
-    var namaObatSet = {};
-    list.forEach(function (s) { s.items.forEach(function (it) { if (it.obat) namaObatSet[it.obat] = true; }); });
-    var dl = document.getElementById('daftarObatDatalistMobile');
-    dl.innerHTML = '';
-    Object.keys(namaObatSet).sort().forEach(function (o) {
-      var opt = document.createElement('option');
-      opt.value = o;
-      dl.appendChild(opt);
-    });
   });
 }
 document.getElementById('obatSearchInput').addEventListener('change', function () {
@@ -1319,7 +1350,7 @@ function renderHasilCariObat(res) {
 }
 
 // =====================================================================
-// TAB 7: TAMBAH JADWAL BARU
+// TAB 7: DAFTARKAN PASIEN (dulu "Tambah Jadwal Baru")
 // =====================================================================
 function muatDataUntukTambah() {
   sb.from('patients').select('nama').order('nama').then(function (res) {
@@ -1332,17 +1363,7 @@ function muatDataUntukTambah() {
       dl.appendChild(opt);
     });
   });
-  loadAllSchedules().then(function (list) {
-    var namaObatSet = {};
-    list.forEach(function (s) { s.items.forEach(function (it) { if (it.obat) namaObatSet[it.obat] = true; }); });
-    var dl = document.getElementById('daftarObatDatalistTambah');
-    dl.innerHTML = '';
-    Object.keys(namaObatSet).sort().forEach(function (o) {
-      var opt = document.createElement('option');
-      opt.value = o;
-      dl.appendChild(opt);
-    });
-  });
+  isiDatalistObat('daftarObatDatalistTambah');
   if (currentObatList.length === 0) {
     currentObatList = [{ obat: '', jumlah: '' }];
     renderObatTable(currentObatList);
