@@ -27,6 +27,12 @@ var currentObatList = [];
 var pasienListTerakhirTertunda = [];
 var currentStokRows = [];
 
+// ---- state khusus tab Daftar Pasien (dulu "Riwayat") ----
+var allPatientNames = [];
+var riwayatPasienAktif = null;
+var pasienListTerakhirRiwayat = [];
+var currentObatListRiwayat = [];
+
 // cache: seluruh jadwal (schedules + items + nama pasien), dimuat sekali per sesi
 // lalu dipakai ulang oleh semua tab. dimuat ulang (invalidate) setelah ada perubahan data.
 var allSchedulesCache = null;
@@ -54,11 +60,11 @@ function hitungStatus(tanggalDate, keterangan) {
 }
 
 function renderBadge(status) {
-  var warna = { 'Tertunda': '#FF5470', 'Sudah Kemo': '#3ED598', 'Hari Ini': '#2FE6C9', 'Belum Kemo': '#7C8CA3' };
-  var w = warna[status] || '#7C8CA3';
+  var warna = { 'Tertunda': '#E23B57', 'Sudah Kemo': '#1E9C6B', 'Hari Ini': '#0E9488', 'Belum Kemo': '#7C8CA0' };
+  var w = warna[status] || '#7C8CA0';
   return '<span style="border:1px solid ' + w + '; background:' + w + '1F; color:' + w +
     '; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; font-family:var(--font-mono); white-space:nowrap;">' +
-    '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:' + w + '; margin-right:5px; box-shadow:0 0 5px ' + w + ';"></span>' +
+    '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:' + w + '; margin-right:5px;"></span>' +
     status + '</span>';
 }
 
@@ -146,6 +152,39 @@ function invalidateCacheAndReload() {
   tertundaDimuat = false;
   dashboardDimuat = false;
   obatDatalistDimuat = false;
+}
+
+// =====================================================================
+// Simpan beberapa siklus jadwal sekaligus — dipakai bersama oleh tab
+// "Tambah" dan form Tambah Jadwal Baru di dalam tab "Daftar Pasien".
+// =====================================================================
+function simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklusAkhir, interval, obatValid) {
+  var siklusAwalNum = parseInt(siklusAwal, 10);
+  var siklusAkhirNum = parseInt(siklusAkhir, 10);
+  var totalSiklus = (!isNaN(siklusAwalNum) && !isNaN(siklusAkhirNum)) ? (siklusAkhirNum - siklusAwalNum + 1) : 1;
+  if (totalSiklus < 1) totalSiklus = 1;
+
+  var scheduleInserts = [];
+  for (var c = 0; c < totalSiklus; c++) {
+    var tglSiklus = new Date(tanggalAwalObj.getTime() + c * (interval || 0) * 86400000);
+    var siklusLabel = isNaN(siklusAwalNum) ? siklusAwal : String(siklusAwalNum + c);
+    scheduleInserts.push({ patient_id: patientId, tanggal: toIsoDate(tglSiklus), siklus: siklusLabel });
+  }
+
+  return sb.from('schedules').insert(scheduleInserts).select('id').then(function (res) {
+    if (res.error) throw res.error;
+    var scheduleIds = res.data.map(function (r) { return r.id; });
+    var itemRows = [];
+    scheduleIds.forEach(function (sid) {
+      obatValid.forEach(function (o) {
+        itemRows.push({ schedule_id: sid, obat: o.obat.trim(), jumlah: o.jumlah === '' ? null : Number(o.jumlah) });
+      });
+    });
+    return sb.from('schedule_items').insert(itemRows).then(function (r2) {
+      if (r2.error) throw r2.error;
+      return scheduleIds.length;
+    });
+  });
 }
 
 // =====================================================================
@@ -319,16 +358,16 @@ function renderJadwalTanggal(detail) {
 
     html += '<div style="display:flex; gap:6px; margin-top:6px;">';
     html += '<button type="button" onclick="toggleUbahTanggalForm(' + i + ')" class="btn-accent" style="flex:1;">Ubah Tanggal</button>';
-    html += '<button type="button" onclick="hapusJadwalTanggal(' + i + ')" style="flex:1; background:#D1364F; color:white; border:none; border-radius:16px; padding:8px 6px; font-size:12px;">Hapus Jadwal</button>';
+    html += '<button type="button" onclick="hapusJadwalTanggal(' + i + ')" style="flex:1; background:var(--danger); color:white; border:none; border-radius:16px; padding:8px 6px; font-size:12px;">Hapus Jadwal</button>';
     html += '</div>';
 
-    html += '<div id="ubahTanggalForm' + i + '" style="display:none; margin-top:8px; background:#16202F; border-radius:8px; padding:8px;">';
+    html += '<div id="ubahTanggalForm' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Baru</label>';
-    html += '<input type="date" id="tanggalBaruInput' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(148,197,222,0.28); font-size:13px; margin-bottom:8px;">';
+    html += '<input type="date" id="tanggalBaruInput' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
     html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px;">';
     html += '<input type="checkbox" id="geserBerikutnyaCek' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama)';
     html += '</label>';
-    html += '<button type="button" onclick="simpanUbahTanggal(' + i + ')" style="margin-top:8px; width:100%; background:#3ED598; color:#04231D; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Simpan Tanggal Baru</button>';
+    html += '<button type="button" onclick="simpanUbahTanggal(' + i + ')" style="margin-top:8px; width:100%; background:var(--success); color:#fff; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Simpan Tanggal Baru</button>';
     html += '</div>';
     html += '</div>';
   });
@@ -521,7 +560,7 @@ function renderRentang(detail) {
   html += '</div><div style="margin-top:16px;">';
   detail.items.forEach(function (item) {
     html += '<div class="card"><div class="nama" style="font-size:14px;">' + escapeHtml(item.obat) + '</div>' +
-      '<div style="font-size:12px; color:#9AA8BE;">Dipakai oleh: ' + escapeHtml(item.pasienList.join(', ')) + '</div></div>';
+      '<div style="font-size:12px; color:var(--muted);">Dipakai oleh: ' + escapeHtml(item.pasienList.join(', ')) + '</div></div>';
   });
   html += '</div>';
   document.getElementById('contentRentang').innerHTML = html;
@@ -593,26 +632,71 @@ function submitStokMasuk() {
 }
 
 // =====================================================================
-// TAB 3: RIWAYAT PASIEN
+// TAB 3: DAFTAR PASIEN (dulu "Riwayat")
+// Alur: daftar semua pasien (abjad + filter live) -> klik nama -> detail
+// riwayat (dengan ubah tanggal / hapus jadwal / tambah jadwal multi-siklus)
 // =====================================================================
 function muatDaftarPasien() {
+  document.getElementById('loadingRiwayatList').style.display = 'block';
   sb.from('patients').select('nama').order('nama').then(function (res) {
-    if (res.error) return;
+    document.getElementById('loadingRiwayatList').style.display = 'none';
+    if (res.error) {
+      document.getElementById('daftarPasienRiwayat').innerHTML = 'Gagal memuat: ' + escapeHtml(res.error.message);
+      return;
+    }
     patientListDimuat = true;
-    var dl = document.getElementById('patientDatalist');
-    dl.innerHTML = '';
-    res.data.forEach(function (row) {
-      var opt = document.createElement('option');
-      opt.value = row.nama;
-      dl.appendChild(opt);
+    allPatientNames = res.data.map(function (row) { return row.nama; });
+    renderDaftarPasienRiwayat(document.getElementById('riwayatSearchInput').value);
+  });
+}
+
+function renderDaftarPasienRiwayat(filter) {
+  var container = document.getElementById('daftarPasienRiwayat');
+  if (!container) return;
+  var f = (filter || '').trim().toLowerCase();
+  var filtered = allPatientNames.filter(function (n) { return n.toLowerCase().indexOf(f) !== -1; });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty">Tidak ada pasien yang cocok.</div>';
+    return;
+  }
+
+  var html = '<div class="pasien-list-card">';
+  filtered.forEach(function (nama, idx) {
+    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(nama) + '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('.pasien-item').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var idx = parseInt(this.getAttribute('data-idx'), 10);
+      pilihPasienRiwayat(filtered[idx]);
     });
   });
 }
-document.getElementById('patientSelect').addEventListener('change', function () {
-  var nama = this.value;
+
+document.getElementById('riwayatSearchInput').addEventListener('input', function () {
+  renderDaftarPasienRiwayat(this.value);
+});
+
+function pilihPasienRiwayat(nama) {
+  riwayatPasienAktif = nama;
+  document.getElementById('riwayatListWrap').style.display = 'none';
+  document.getElementById('riwayatDetailWrap').style.display = 'block';
+  document.getElementById('riwayatDetailNama').textContent = nama;
+  muatRiwayatPasienDetail(nama);
+}
+
+function kembaliKeDaftarPasien() {
+  riwayatPasienAktif = null;
+  document.getElementById('riwayatDetailWrap').style.display = 'none';
+  document.getElementById('riwayatListWrap').style.display = 'block';
+}
+
+function muatRiwayatPasienDetail(nama) {
   document.getElementById('contentRiwayat').innerHTML = '';
   document.getElementById('ringkasanRiwayat').innerHTML = '';
-  if (!nama) return;
   document.getElementById('loadingRiwayat').style.display = 'block';
   document.getElementById('loadingRiwayat').innerText = 'Memuat riwayat...';
 
@@ -620,31 +704,197 @@ document.getElementById('patientSelect').addEventListener('change', function () 
     document.getElementById('loadingRiwayat').style.display = 'none';
     var mine = list.filter(function (s) { return s.nama.toLowerCase() === nama.toLowerCase(); });
     mine.sort(function (a, b) { return a.dateObj.getTime() - b.dateObj.getTime(); }); // paling lama dulu
-    var hasil = mine.map(function (s) {
-      return { tanggal: s.tanggal, siklus: s.siklus, obatRingkas: s.items.map(function (it) { return it.obat + (it.jumlah !== '' ? ' (' + it.jumlah + ')' : ''); }).join(', '), status: hitungStatus(s.dateObj, s.keterangan) };
+
+    pasienListTerakhirRiwayat = mine.map(function (s) {
+      return { id: s.id, patient_id: s.patient_id, tanggal: s.tanggal, dateObj: s.dateObj, siklus: s.siklus, items: s.items, status: hitungStatus(s.dateObj, s.keterangan) };
     });
-    renderRiwayat(nama, hasil);
+
+    renderRiwayat(nama, pasienListTerakhirRiwayat);
+    siapkanFormTambahRiwayat(nama, mine);
   }).catch(function (err) {
     document.getElementById('loadingRiwayat').innerText = 'Gagal memuat: ' + err.message;
   });
-});
+}
 
 function renderRiwayat(nama, list) {
   if (!list || list.length === 0) {
     document.getElementById('ringkasanRiwayat').innerHTML = 'Belum ada riwayat kemo untuk ' + escapeHtml(nama) + '.';
+    document.getElementById('contentRiwayat').innerHTML = '';
     return;
   }
   document.getElementById('ringkasanRiwayat').innerHTML = 'Total ' + list.length + ' kali jadwal (dari paling lama ke paling baru)';
+
   var html = '';
   list.forEach(function (item, i) {
     var isTerakhir = (i === list.length - 1);
+    var obatRingkas = item.items.map(function (it) { return it.obat + (it.jumlah !== '' && it.jumlah != null ? ' (' + it.jumlah + ')' : ''); }).join(', ');
+
     html += '<div class="timeline-item' + (isTerakhir ? ' terakhir' : '') + '">' +
       '<div class="timeline-tanggal" style="display:flex; justify-content:space-between; align-items:center;">' +
       '<span>' + item.tanggal + (isTerakhir ? ' (Terakhir)' : '') + '</span>' + renderBadge(item.status) + '</div>' +
       '<div class="timeline-siklus">Siklus ' + escapeHtml(item.siklus) + '</div>' +
-      '<div class="timeline-obat">' + escapeHtml(item.obatRingkas) + '</div></div>';
+      '<div class="timeline-obat">' + escapeHtml(obatRingkas) + '</div>';
+
+    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
+    html += '<button type="button" onclick="toggleUbahTanggalRiwayat(' + i + ')" class="btn-accent" style="flex:1;">Ubah Tanggal</button>';
+    html += '<button type="button" onclick="hapusJadwalRiwayat(' + i + ')" class="btn-danger" style="flex:1;">Hapus Jadwal</button>';
+    html += '</div>';
+
+    html += '<div id="ubahTanggalRiwayat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Baru</label>';
+    html += '<input type="date" id="tanggalBaruRiwayat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<button type="button" onclick="simpanUbahTanggalRiwayat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan Tanggal Baru</button>';
+    html += '</div>';
+
+    html += '</div>';
   });
+
   document.getElementById('contentRiwayat').innerHTML = html;
+}
+
+function toggleUbahTanggalRiwayat(i) {
+  var el = document.getElementById('ubahTanggalRiwayat' + i);
+  el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+function simpanUbahTanggalRiwayat(i) {
+  var p = pasienListTerakhirRiwayat[i];
+  if (!p) return;
+  var iso = document.getElementById('tanggalBaruRiwayat' + i).value;
+  if (!iso) { alert('Pilih tanggal baru terlebih dahulu.'); return; }
+
+  document.getElementById('loadingRiwayat').style.display = 'block';
+  document.getElementById('loadingRiwayat').innerText = 'Menyimpan perubahan tanggal...';
+
+  sb.from('schedules').update({ tanggal: iso }).eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateCacheAndReload();
+    muatRiwayatPasienDetail(riwayatPasienAktif);
+  }).catch(function (err) {
+    document.getElementById('loadingRiwayat').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function hapusJadwalRiwayat(i) {
+  var p = pasienListTerakhirRiwayat[i];
+  if (!p) return;
+  var konfirmasi = window.confirm('Yakin mau menghapus jadwal (Siklus ' + p.siklus + ') pada ' + p.tanggal + '?\n\nTindakan ini tidak bisa dibatalkan.');
+  if (!konfirmasi) return;
+
+  document.getElementById('loadingRiwayat').style.display = 'block';
+  document.getElementById('loadingRiwayat').innerText = 'Menghapus...';
+
+  sb.from('schedules').delete().eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateCacheAndReload();
+    muatRiwayatPasienDetail(riwayatPasienAktif);
+  }).catch(function (err) {
+    document.getElementById('loadingRiwayat').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+// ---- Form "Tambah Jadwal Baru" (multi-siklus) di dalam detail pasien ----
+function siapkanFormTambahRiwayat(nama, mineSortedAsc) {
+  document.getElementById('riwayatTambahStatus').className = 'status-msg';
+  document.getElementById('riwayatTambahStatus').textContent = '';
+  document.getElementById('riwayatTambahTanggal').value = '';
+  document.getElementById('riwayatTambahSiklusAkhir').value = '';
+  document.getElementById('riwayatTambahInterval').value = '';
+
+  if (!mineSortedAsc || mineSortedAsc.length === 0) {
+    document.getElementById('riwayatTambahSiklusAwal').value = '1';
+    currentObatListRiwayat = [{ obat: '', jumlah: '' }];
+    renderObatTableRiwayat(currentObatListRiwayat);
+    return;
+  }
+
+  var last = mineSortedAsc[mineSortedAsc.length - 1]; // paling baru
+  var siklusNum = parseInt(last.siklus, 10);
+  document.getElementById('riwayatTambahSiklusAwal').value = isNaN(siklusNum) ? '' : (siklusNum + 1);
+  currentObatListRiwayat = last.items.map(function (it) { return { obat: it.obat, jumlah: it.jumlah }; });
+  if (currentObatListRiwayat.length === 0) currentObatListRiwayat = [{ obat: '', jumlah: '' }];
+  renderObatTableRiwayat(currentObatListRiwayat);
+
+  sb.from('patients').select('interval_hari').ilike('nama', nama).maybeSingle().then(function (res) {
+    if (res.data && res.data.interval_hari) document.getElementById('riwayatTambahInterval').value = res.data.interval_hari;
+  });
+}
+
+function tambahBarisObatRiwayatKosong() {
+  currentObatListRiwayat.push({ obat: '', jumlah: '' });
+  renderObatTableRiwayat(currentObatListRiwayat);
+}
+function hapusBarisObatRiwayat(i) {
+  currentObatListRiwayat.splice(i, 1);
+  renderObatTableRiwayat(currentObatListRiwayat);
+}
+function renderObatTableRiwayat(list) {
+  var html = '';
+  list.forEach(function (item, i) {
+    html += '<div class="obat-row">' +
+      '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
+      '<input type="number" data-i="' + i + '" data-f="jumlah" placeholder="Jumlah" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
+      '<button type="button" onclick="hapusBarisObatRiwayat(' + i + ')">×</button></div>';
+  });
+  document.getElementById('riwayatObatContainer').innerHTML = html;
+  document.querySelectorAll('#riwayatObatContainer .obat-row input').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      var i = parseInt(this.getAttribute('data-i'), 10);
+      var f = this.getAttribute('data-f');
+      currentObatListRiwayat[i][f] = this.value;
+    });
+  });
+}
+
+function submitTambahJadwalRiwayat() {
+  var nama = riwayatPasienAktif;
+  if (!nama) return;
+
+  var isoTanggal = document.getElementById('riwayatTambahTanggal').value;
+  var siklusAwal = document.getElementById('riwayatTambahSiklusAwal').value.trim() || '1';
+  var siklusAkhir = document.getElementById('riwayatTambahSiklusAkhir').value.trim() || siklusAwal;
+  var interval = parseInt(document.getElementById('riwayatTambahInterval').value, 10);
+  var statusEl = document.getElementById('riwayatTambahStatus');
+  statusEl.className = 'status-msg';
+  statusEl.textContent = '';
+
+  if (!isoTanggal) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Tanggal wajib diisi.'; return; }
+  var obatValid = currentObatListRiwayat.filter(function (o) { return (o.obat || '').toString().trim() !== ''; });
+  if (obatValid.length === 0) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Isi minimal satu obat terlebih dahulu.'; return; }
+
+  var siklusAwalNum = parseInt(siklusAwal, 10);
+  var siklusAkhirNum = parseInt(siklusAkhir, 10);
+  var totalSiklusCek = (!isNaN(siklusAwalNum) && !isNaN(siklusAkhirNum)) ? (siklusAkhirNum - siklusAwalNum + 1) : 1;
+  if (totalSiklusCek > 1 && (!interval || interval < 1)) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Interval (hari) wajib diisi untuk membuat lebih dari 1 siklus sekaligus.';
+    return;
+  }
+
+  document.getElementById('riwayatTambahSubmitBtn').disabled = true;
+  statusEl.textContent = 'Menyimpan...';
+
+  var tanggalAwalObj = new Date(isoTanggal + 'T00:00:00');
+
+  sb.from('patients').select('id').ilike('nama', nama).maybeSingle().then(function (res) {
+    if (!res.data) throw new Error('Data pasien tidak ditemukan.');
+    var patientId = res.data.id;
+    if (interval) sb.from('patients').update({ interval_hari: interval }).eq('id', patientId).then(function () {});
+    return simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklusAkhir, interval, obatValid);
+  }).then(function (jumlahSiklusDibuat) {
+    document.getElementById('riwayatTambahSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg ok';
+    statusEl.textContent = 'Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.';
+    invalidateCacheAndReload();
+    document.getElementById('riwayatTambahSiklusAkhir').value = '';
+    muatRiwayatPasienDetail(nama);
+  }).catch(function (err) {
+    document.getElementById('riwayatTambahSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Gagal: ' + err.message;
+  });
 }
 
 // =====================================================================
@@ -693,7 +943,7 @@ function renderTertunda(detail) {
   detail.pasienList.forEach(function (p, i) {
     html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
       '<span>' + escapeHtml(p.nama) + '</span>' + renderBadge('Tertunda') + '</div>' +
-      '<div style="font-size:12px; color:#9AA8BE; margin-bottom:6px;">Jadwal asal: ' + p.tanggalAsal + ' (Siklus ' + escapeHtml(p.siklus) + ')</div>';
+      '<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Jadwal asal: ' + p.tanggalAsal + ' (Siklus ' + escapeHtml(p.siklus) + ')</div>';
     p.obatList.forEach(function (o) { html += '<div class="obat-item"><span>' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>'; });
 
     html += '<div style="display:flex; gap:6px; margin-top:8px;">';
@@ -844,9 +1094,9 @@ function muatDashboard() {
 
 function renderDashboard(r) {
   var html = '<div style="display:flex; gap:10px; margin-bottom:14px;">';
-  html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:#2FE6C9; font-family:var(--font-mono);">' + r.totalPasienMingguIni + '</div><div style="font-size:12px; color:#9AA8BE;">Pasien Minggu Ini</div></div>';
-  html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:#3ED598; font-family:var(--font-mono);">' + r.totalPasienBulanIni + '</div><div style="font-size:12px; color:#9AA8BE;">Pasien Bulan Ini</div></div>';
-  html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:#FF5470; font-family:var(--font-mono);">' + r.totalTertunda + '</div><div style="font-size:12px; color:#9AA8BE;">Tertunda</div></div>';
+  html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:var(--accent-dim); font-family:var(--font-mono);">' + r.totalPasienMingguIni + '</div><div style="font-size:12px; color:var(--muted);">Pasien Minggu Ini</div></div>';
+  html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:var(--success); font-family:var(--font-mono);">' + r.totalPasienBulanIni + '</div><div style="font-size:12px; color:var(--muted);">Pasien Bulan Ini</div></div>';
+  html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:var(--danger); font-family:var(--font-mono);">' + r.totalTertunda + '</div><div style="font-size:12px; color:var(--muted);">Tertunda</div></div>';
   html += '</div>';
 
   html += '<div class="total-section"><h2>Jumlah Pasien Kemo</h2>';
@@ -854,15 +1104,15 @@ function renderDashboard(r) {
   html += '<button onclick="muatGrafikPasien(\'bulan\')" id="btnGrafikBulan" style="flex:1; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Per Bulan</button>';
   html += '<button onclick="muatGrafikPasien(\'minggu\')" id="btnGrafikMinggu" style="flex:1; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Per Minggu</button>';
   html += '</div>';
-  html += '<div id="loadingGrafikPasien" style="text-align:center; color:#7C8CA3; font-size:12px; padding:10px; display:none;">Memuat...</div>';
+  html += '<div id="loadingGrafikPasien" style="text-align:center; color:var(--muted); font-size:12px; padding:10px; display:none;">Memuat...</div>';
   html += '<div id="grafikPasienContainer"></div></div>';
 
   if (r.pasienBerpotensiHilang.length > 0) {
-    html += '<div class="card" style="margin-top:14px; border-left:4px solid #FF5470;">';
+    html += '<div class="card" style="margin-top:14px; border-left:4px solid var(--danger);">';
     html += '<div class="nama" style="font-size:14px;">⚠️ Berpotensi Belum Follow-up (' + r.pasienBerpotensiHilang.length + ')</div>';
-    html += '<div style="font-size:12px; color:#9AA8BE; margin-bottom:8px;">Perkiraan jadwal berikutnya sudah lewat &gt;7 hari, belum ada jadwal baru</div>';
+    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Perkiraan jadwal berikutnya sudah lewat &gt;7 hari, belum ada jadwal baru</div>';
     r.pasienBerpotensiHilang.forEach(function (p) {
-      html += '<div class="obat-item"><span>' + escapeHtml(p.nama) + '</span><span style="color:#FF5470; font-weight:600;">' + p.terlambatHari + ' hari</span></div>';
+      html += '<div class="obat-item"><span>' + escapeHtml(p.nama) + '</span><span style="color:var(--danger); font-weight:600;">' + p.terlambatHari + ' hari</span></div>';
     });
     html += '</div>';
   }
@@ -875,10 +1125,10 @@ function setActiveGrafikButton() {
   var btnBulan = document.getElementById('btnGrafikBulan');
   var btnMinggu = document.getElementById('btnGrafikMinggu');
   if (!btnBulan || !btnMinggu) return;
-  btnBulan.style.background = (modeGrafikPasienAktif === 'bulan') ? '#2FE6C9' : '#16202F';
-  btnBulan.style.color = (modeGrafikPasienAktif === 'bulan') ? '#04231D' : '#AEB9CC';
-  btnMinggu.style.background = (modeGrafikPasienAktif === 'minggu') ? '#2FE6C9' : '#16202F';
-  btnMinggu.style.color = (modeGrafikPasienAktif === 'minggu') ? '#04231D' : '#AEB9CC';
+  btnBulan.style.background = (modeGrafikPasienAktif === 'bulan') ? 'var(--accent)' : 'var(--surface-2)';
+  btnBulan.style.color = (modeGrafikPasienAktif === 'bulan') ? 'var(--accent-contrast)' : 'var(--label)';
+  btnMinggu.style.background = (modeGrafikPasienAktif === 'minggu') ? 'var(--accent)' : 'var(--surface-2)';
+  btnMinggu.style.color = (modeGrafikPasienAktif === 'minggu') ? 'var(--accent-contrast)' : 'var(--label)';
 }
 
 function muatGrafikPasien(mode) {
@@ -934,7 +1184,7 @@ function renderGrafikPasien(data) {
   var containerEl = document.getElementById('grafikPasienContainer');
   if (!containerEl) return;
   if (!data.values || data.values.length === 0) {
-    containerEl.innerHTML = '<div style="text-align:center; color:#7C8CA3; font-size:12px; padding:10px;">Belum ada data.</div>';
+    containerEl.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:12px; padding:10px;">Belum ada data.</div>';
     return;
   }
   var maxVal = Math.max.apply(null, data.values.concat([1]));
@@ -943,10 +1193,10 @@ function renderGrafikPasien(data) {
     var tinggiPersen = (v / maxVal) * 100;
     html += '<div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;">' +
       '<div style="font-size:11px; font-weight:600; margin-bottom:2px;">' + v + '</div>' +
-      '<div style="width:100%; background:linear-gradient(180deg, #2FE6C9, #21A98F); border-radius:4px 4px 0 0; height:' + tinggiPersen + '%; min-height:2px; box-shadow:0 0 8px rgba(47,230,201,0.5);"></div></div>';
+      '<div style="width:100%; background:linear-gradient(180deg, var(--accent), var(--accent-dim)); border-radius:4px 4px 0 0; height:' + tinggiPersen + '%; min-height:2px; box-shadow:0 2px 6px rgba(14,148,136,0.25);"></div></div>';
   });
   html += '</div><div style="display:flex; gap:6px; margin-top:6px;">';
-  data.labels.forEach(function (l) { html += '<div style="flex:1; text-align:center; font-size:9px; color:#9AA8BE;">' + escapeHtml(l) + '</div>'; });
+  data.labels.forEach(function (l) { html += '<div style="flex:1; text-align:center; font-size:9px; color:var(--muted);">' + escapeHtml(l) + '</div>'; });
   html += '</div>';
   containerEl.innerHTML = html;
 }
@@ -1004,7 +1254,7 @@ function renderHasilCariObat(res) {
   var html = '';
   res.daftar.forEach(function (item) {
     html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
-      '<span>' + escapeHtml(item.nama) + '</span><span style="font-size:12px; color:#9AA8BE; font-weight:normal;">Siklus ' + escapeHtml(item.siklus) + '</span></div>' +
+      '<span>' + escapeHtml(item.nama) + '</span><span style="font-size:12px; color:var(--muted); font-weight:normal;">Siklus ' + escapeHtml(item.siklus) + '</span></div>' +
       '<div class="obat-item"><span>' + item.tanggal + '</span><span class="obat-jumlah">' + item.jumlah + '</span></div></div>';
   });
   document.getElementById('contentCariObat').innerHTML = html;
@@ -1145,7 +1395,6 @@ function submitTambahJadwal() {
   if (totalSiklus > 1 && (!interval || interval < 1)) {
     statusEl.className = 'status-msg error'; statusEl.textContent = 'Interval (hari) wajib diisi untuk membuat lebih dari 1 siklus sekaligus.'; return;
   }
-  if (totalSiklus < 1) totalSiklus = 1;
 
   document.getElementById('tambahSubmitBtn').disabled = true;
   statusEl.textContent = 'Menyimpan...';
@@ -1159,29 +1408,8 @@ function submitTambahJadwal() {
       return r.data.id;
     });
   }).then(function (patientId) {
-    if (interval) {
-      sb.from('patients').update({ interval_hari: interval }).eq('id', patientId).then(function () {});
-    }
-    var scheduleInserts = [];
-    for (var c = 0; c < totalSiklus; c++) {
-      var tglSiklus = new Date(tanggalAwalObj.getTime() + c * (interval || 0) * 86400000);
-      var siklusLabel = isNaN(siklusAwalNum) ? siklusAwal : String(siklusAwalNum + c);
-      scheduleInserts.push({ patient_id: patientId, tanggal: toIsoDate(tglSiklus), siklus: siklusLabel });
-    }
-    return sb.from('schedules').insert(scheduleInserts).select('id');
-  }).then(function (res) {
-    if (res.error) throw res.error;
-    var scheduleIds = res.data.map(function (r) { return r.id; });
-    var itemRows = [];
-    scheduleIds.forEach(function (sid) {
-      obatValid.forEach(function (o) {
-        itemRows.push({ schedule_id: sid, obat: o.obat.trim(), jumlah: o.jumlah === '' ? null : Number(o.jumlah) });
-      });
-    });
-    return sb.from('schedule_items').insert(itemRows).then(function (r2) {
-      if (r2.error) throw r2.error;
-      return scheduleIds.length;
-    });
+    if (interval) sb.from('patients').update({ interval_hari: interval }).eq('id', patientId).then(function () {});
+    return simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklusAkhir, interval, obatValid);
   }).then(function (jumlahSiklusDibuat) {
     document.getElementById('tambahSubmitBtn').disabled = false;
     statusEl.className = 'status-msg ok';
@@ -1194,3 +1422,6 @@ function submitTambahJadwal() {
     statusEl.textContent = 'Gagal: ' + err.message;
   });
 }
+
+// Muat tab pertama saat halaman dibuka (jika sudah login lewat sesi tersimpan)
+document.getElementById('kalTanggalJump').value = toIsoDate(tanggalAktif);
