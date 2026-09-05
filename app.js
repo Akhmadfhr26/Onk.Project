@@ -71,12 +71,21 @@ function renderBadge(status) {
 // =====================================================================
 // AUTH
 // =====================================================================
+// Pemetaan ID login sederhana -> akun Supabase asli.
+// Tambahkan baris baru di sini kalau mau bikin ID lain (misal untuk perawat/dokter lain).
+var LOGIN_ID_MAP = {
+  'depo': 'depo@klinik.local'
+};
+
 function handleLogin() {
-  var email = document.getElementById('loginEmail').value.trim();
+  var idInput = document.getElementById('loginEmail').value.trim();
   var password = document.getElementById('loginPassword').value;
   var errEl = document.getElementById('loginError');
   errEl.textContent = '';
-  if (!email || !password) { errEl.textContent = 'Isi email dan kata sandi.'; return; }
+  if (!idInput || !password) { errEl.textContent = 'Isi ID dan kata sandi.'; return; }
+
+  var email = LOGIN_ID_MAP[idInput.toLowerCase()];
+  if (!email) { errEl.textContent = 'ID tidak dikenali.'; return; }
 
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('loginBtn').textContent = 'Masuk...';
@@ -84,7 +93,7 @@ function handleLogin() {
   sb.auth.signInWithPassword({ email: email, password: password }).then(function (res) {
     document.getElementById('loginBtn').disabled = false;
     document.getElementById('loginBtn').textContent = 'Masuk';
-    if (res.error) { errEl.textContent = res.error.message; return; }
+    if (res.error) { errEl.textContent = 'ID atau kata sandi salah.'; return; }
     showApp(res.data.user);
   });
 }
