@@ -743,6 +743,9 @@ function renderRiwayat(nama, list) {
     html += '<div id="ubahTanggalRiwayat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Baru</label>';
     html += '<input type="date" id="tanggalBaruRiwayat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
+    html += '<input type="checkbox" id="geserBerikutnyaRiwayat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, jadwal sebelumnya tidak berubah)';
+    html += '</label>';
     html += '<button type="button" onclick="simpanUbahTanggalRiwayat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan Tanggal Baru</button>';
     html += '</div>';
 
@@ -762,12 +765,34 @@ function simpanUbahTanggalRiwayat(i) {
   if (!p) return;
   var iso = document.getElementById('tanggalBaruRiwayat' + i).value;
   if (!iso) { alert('Pilih tanggal baru terlebih dahulu.'); return; }
+  var geser = document.getElementById('geserBerikutnyaRiwayat' + i).checked;
 
   document.getElementById('loadingRiwayat').style.display = 'block';
   document.getElementById('loadingRiwayat').innerText = 'Menyimpan perubahan tanggal...';
 
-  sb.from('schedules').update({ tanggal: iso }).eq('id', p.id).then(function (res) {
-    if (res.error) throw res.error;
+  var tanggalLamaObj = dateOnly(p.dateObj);
+  var parts = iso.split('-');
+  var tanggalBaruObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  var deltaDays = Math.round((tanggalBaruObj.getTime() - tanggalLamaObj.getTime()) / 86400000);
+
+  loadAllSchedules().then(function (list) {
+    var updates = [sb.from('schedules').update({ tanggal: iso }).eq('id', p.id)];
+    if (geser && deltaDays !== 0) {
+      list.forEach(function (s) {
+        if (s.id === p.id) return;
+        if (s.patient_id !== p.patient_id) return;
+        // hanya geser jadwal yang tanggalnya SETELAH tanggal lama (siklus berikutnya);
+        // jadwal sebelumnya tidak disentuh sama sekali.
+        if (dateOnly(s.dateObj).getTime() > tanggalLamaObj.getTime()) {
+          var geseredDate = new Date(s.dateObj.getTime() + deltaDays * 86400000);
+          updates.push(sb.from('schedules').update({ tanggal: toIsoDate(geseredDate) }).eq('id', s.id));
+        }
+      });
+    }
+    return Promise.all(updates);
+  }).then(function (results) {
+    var failed = results.find(function (r) { return r.error; });
+    if (failed) throw failed.error;
     invalidateCacheAndReload();
     muatRiwayatPasienDetail(riwayatPasienAktif);
   }).catch(function (err) {
