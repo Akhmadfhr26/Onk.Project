@@ -25,6 +25,8 @@
     --neutral: #3A4656;
     --radius: 14px;
     --radius-sm: 9px;
+    --sidebar-w: 248px;
+    --content-max: 1080px;
     --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', 'Droid Sans Mono', Consolas, Menlo, monospace;
   }
@@ -32,10 +34,9 @@
   html { background: var(--bg); }
   body {
     font-family: var(--font-display);
-    margin: 0; padding: 18px 16px 60px;
+    margin: 0; padding: 0;
     background: var(--bg); color: var(--text);
     -webkit-font-smoothing: antialiased;
-    max-width: 480px; margin-left: auto; margin-right: auto;
   }
   .mono { font-family: var(--font-mono); }
 
@@ -45,32 +46,59 @@
     display: inline-flex; align-items: center; gap: 8px;
   }
   .header-pulse { display: block; margin: 6px auto 0; opacity: 0.85; }
-  .header-user { position:absolute; right:0; top:0; font-size:11px; color:var(--muted); }
-  .header-user button { background:none; border:none; color:var(--danger); font-size:11px; font-weight:600; padding:2px; }
+  .header-user { font-size:12px; color:var(--muted); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .header-user button { background:none; border:none; color:var(--danger); font-size:12px; font-weight:600; padding:2px; cursor:pointer; }
 
-  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
-  .tab-btn {
-    min-width: 30%; flex: 1; padding: 12px 8px; border: 1px solid var(--border);
-    border-radius: var(--radius-sm); background: var(--surface); color: var(--muted);
-    font-size: 13px; font-weight: 600; font-family: var(--font-display);
-    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  /* ===== Web shell: classic sidebar + content ===== */
+  .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
+
+  .sidebar {
+    width: var(--sidebar-w); flex-shrink: 0;
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
   }
+  .sidebar .header { text-align: left; margin-bottom: 22px; }
+  .sidebar .header h1 { font-size: 17px; }
+  .sidebar .header-pulse { margin-left: 0; }
+
+  .tabs { display: flex; flex-direction: column; gap: 4px; flex: 1; margin-bottom: 0; }
+  .tab-btn {
+    min-width: 0; width: 100%; flex: none;
+    display: flex; align-items: center; gap: 10px;
+    text-align: left; padding: 11px 12px; border: 1px solid transparent;
+    border-radius: var(--radius-sm); background: transparent; color: var(--muted);
+    font-size: 13.5px; font-weight: 600; font-family: var(--font-display);
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    cursor: pointer;
+  }
+  .tab-btn:hover { background: var(--surface-2); color: var(--label); }
   .tab-btn.active {
     background: var(--accent-soft); color: var(--accent); border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent) inset;
   }
 
+  .sidebar-footer {
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+  }
+
+  .main-content {
+    flex: 1; min-width: 0; padding: 32px 40px 60px;
+    display: flex; justify-content: center;
+  }
+  .main-content-inner { width: 100%; max-width: var(--content-max); }
+
   .nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
   .nav button {
     background: var(--accent); color: #04231D; border: none; border-radius: 24px;
-    padding: 12px 18px; font-size: 14px; font-weight: 600; flex-shrink: 0;
+    padding: 12px 18px; font-size: 14px; font-weight: 600; flex-shrink: 0; cursor: pointer;
   }
   .nav button:active { background: var(--accent-dim); }
   .tanggal-label { font-weight: 600; font-size: 15px; text-align: center; flex-grow: 1; font-family: var(--font-mono); }
   .today-btn {
     display: block; width: 100%; text-align: center; background: none;
     border: 1px solid var(--accent); color: var(--accent); border-radius: 20px;
-    padding: 9px; font-size: 13px; margin-bottom: 16px; font-weight: 600;
+    padding: 9px; font-size: 13px; margin-bottom: 16px; font-weight: 600; cursor: pointer;
   }
   .today-btn:active { background: var(--accent-soft); }
 
@@ -129,14 +157,14 @@
   .kal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
   .kal-nav button {
     background: var(--accent); color: #04231D; border: none; border-radius: 24px;
-    padding: 10px 16px; font-size: 14px; font-weight: 700;
+    padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
   }
   .kal-bulan-label { font-weight: 600; font-size: 16px; font-family: var(--font-mono); }
-  .kal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
-  .kal-hari-label { text-align: center; font-size: 11px; color: var(--muted); font-weight: 600; padding-bottom: 4px; }
+  .kal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .kal-hari-label { text-align: center; font-size: 12px; color: var(--muted); font-weight: 600; padding-bottom: 4px; }
   .kal-cell {
-    min-height: 62px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
-    padding: 3px 2px; display: flex; flex-direction: column; font-size: 10px; overflow: hidden;
+    min-height: 92px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 6px 6px; display: flex; flex-direction: column; font-size: 11px; overflow: hidden;
     cursor: pointer;
   }
   .kal-cell.kosong { background: transparent; border-color: transparent; cursor: default; }
@@ -145,16 +173,16 @@
   .kal-cell.hari-ini { box-shadow: 0 0 0 2px var(--accent); }
   .kal-cell.terpilih { background: var(--accent) !important; border-color: var(--accent); }
   .kal-cell.terpilih .kal-tgl-num, .kal-cell.terpilih .kal-entri { color: #04231D; }
-  .kal-tgl-num { font-weight: 700; font-size: 11px; margin-bottom: 2px; font-family: var(--font-mono); }
-  .kal-entri { font-size: 9px; line-height: 1.25; color: var(--label); word-break: break-word; }
+  .kal-tgl-num { font-weight: 700; font-size: 12px; margin-bottom: 3px; font-family: var(--font-mono); }
+  .kal-entri { font-size: 10px; line-height: 1.3; color: var(--label); word-break: break-word; }
 
   /* Extra: login screen */
-  #loginScreen { max-width: 360px; margin: 60px auto; }
+  #loginScreen { max-width: 360px; margin: 90px auto; padding: 0 20px; }
   #loginScreen .card { padding: 24px; }
   #loginScreen .err { color: var(--danger); font-size: 13px; margin-top: -8px; margin-bottom: 12px; min-height: 16px; }
   #loginScreen button.primary, .btn-primary {
     background: var(--accent); color: #04231D; border: none; border-radius: 20px;
-    padding: 12px; font-size: 14px; font-weight: 700; width: 100%;
+    padding: 12px; font-size: 14px; font-weight: 700; width: 100%; cursor: pointer;
   }
   #loginScreen button.primary:disabled { opacity: 0.6; }
   #appScreen { display: none; }
@@ -164,14 +192,32 @@
   .obat-row input { margin-bottom: 0; }
   .obat-row input[data-f="obat"] { flex: 2; }
   .obat-row input[data-f="jumlah"] { flex: 1; }
-  .obat-row button { flex-shrink: 0; background: var(--danger); color: #fff; border: none; border-radius: 8px; padding: 0 12px; font-size: 14px; }
-  .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 16px; padding: 9px 14px; font-size: 13px; font-weight: 600; }
-  .btn-danger { background: var(--danger); color: #fff; border: none; border-radius: 16px; padding: 8px 12px; font-size: 12px; width: 100%; }
-  .btn-neutral { background: var(--neutral); color: #fff; border: none; border-radius: 16px; padding: 8px 12px; font-size: 12px; width: 100%; }
-  .btn-accent { background: var(--accent); color: #04231D; border: none; border-radius: 16px; padding: 8px 6px; font-size: 12px; font-weight: 700; }
+  .obat-row button { flex-shrink: 0; background: var(--danger); color: #fff; border: none; border-radius: 8px; padding: 0 12px; font-size: 14px; cursor: pointer; }
+  .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 16px; padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-danger { background: var(--danger); color: #fff; border: none; border-radius: 16px; padding: 8px 12px; font-size: 12px; width: 100%; cursor: pointer; }
+  .btn-neutral { background: var(--neutral); color: #fff; border: none; border-radius: 16px; padding: 8px 12px; font-size: 12px; width: 100%; cursor: pointer; }
+  .btn-accent { background: var(--accent); color: #04231D; border: none; border-radius: 16px; padding: 8px 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
   .status-msg { font-size: 13px; margin-top: 4px; min-height: 18px; }
   .status-msg.ok { color: var(--success); }
   .status-msg.error { color: var(--danger); }
+
+  /* Two-column helper for wider forms on desktop */
+  .form-row-2 { display: flex; gap: 16px; }
+  .form-row-2 > div { flex: 1; }
+
+  /* Collapse back to mobile layout on narrow viewports */
+  @media (max-width: 860px) {
+    .app-shell { flex-direction: column; }
+    .sidebar {
+      width: 100%; height: auto; position: static; border-right: none;
+      border-bottom: 1px solid var(--border); padding: 16px;
+    }
+    .sidebar .header { text-align: center; }
+    .tabs { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+    .tab-btn { min-width: 30%; flex: 1; justify-content: center; }
+    .sidebar-footer { margin-top: 12px; }
+    .main-content { padding: 20px 16px 60px; }
+  }
 </style>
 </head>
 <body>
@@ -197,124 +243,151 @@
 
 <!-- ================= APP SCREEN ================= -->
 <div id="appScreen">
+<div class="app-shell">
 
-<div class="header">
-  <h1>💊 Jadwal Kemoterapi</h1>
-  <svg class="header-pulse" width="140" height="20" viewBox="0 0 140 20" fill="none">
-    <path d="M0 10 H45 L52 2 L60 18 L67 10 H140" stroke="#2FE6C9" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.7"/>
-  </svg>
-  <div class="header-user"><span id="headerUserEmail"></span> · <button onclick="handleLogout()">Keluar</button></div>
-</div>
-
-<div class="tabs">
-  <button class="tab-btn active" id="tabBtnKalender" onclick="switchTab('kalender')">🗓️ Kalender</button>
-  <button class="tab-btn" id="tabBtnRentang" onclick="switchTab('rentang')">📊 Rentang</button>
-  <button class="tab-btn" id="tabBtnRiwayat" onclick="switchTab('riwayat')">📋 Riwayat</button>
-  <button class="tab-btn" id="tabBtnTertunda" onclick="switchTab('tertunda')">⏸ Tertunda</button>
-  <button class="tab-btn" id="tabBtnDashboard" onclick="switchTab('dashboard')">📈 Dashboard</button>
-  <button class="tab-btn" id="tabBtnCariObat" onclick="switchTab('cariobat')">💊 Cari Obat</button>
-  <button class="tab-btn" id="tabBtnTambah" onclick="switchTab('tambah')">➕ Tambah</button>
-</div>
-
-<!-- ===== TAB 1: KALENDER ===== -->
-<div id="tabKalender">
-  <label class="field-label">Loncat ke Tanggal</label>
-  <input type="date" id="kalTanggalJump">
-  <button class="today-btn" onclick="kalKeHariIni()">Kembali ke Hari Ini</button>
-
-  <div class="kal-nav">
-    <button onclick="gantiBulanKalender(-1)">‹</button>
-    <div class="kal-bulan-label" id="kalBulanLabel">Memuat...</div>
-    <button onclick="gantiBulanKalender(1)">›</button>
-  </div>
-  <div class="kal-grid" id="kalHariLabelRow"></div>
-  <div class="kal-grid" id="kalGrid" style="margin-top:4px;"></div>
-  <div id="loadingKalender" class="loading-msg">Memuat...</div>
-
-  <div id="kalDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
-  <div id="loadingKalDetail" class="loading-msg">Memuat jadwal...</div>
-  <div id="kalDetailContainer"></div>
-</div>
-
-<!-- ===== TAB 2: RENTANG ===== -->
-<div id="tabRentang" style="display:none">
-  <label class="field-label">Dari Tanggal</label>
-  <input type="date" id="rentangMulai">
-  <label class="field-label">Sampai Tanggal</label>
-  <input type="date" id="rentangAkhir" style="margin-bottom:12px;">
-  <button onclick="muatKebutuhanRentang()" class="btn-primary" style="margin-bottom:16px;">Tampilkan Rekap</button>
-
-  <div id="loadingRentang" class="loading-msg" style="display:none;">Memuat...</div>
-  <div id="ringkasanRentang" class="ringkasan-jumlah"></div>
-  <div id="contentRentang"></div>
-</div>
-
-<!-- ===== TAB 3: RIWAYAT ===== -->
-<div id="tabRiwayat" style="display:none">
-  <input type="text" id="patientSelect" list="patientDatalist" placeholder="Ketik nama pasien..." autocomplete="off">
-  <datalist id="patientDatalist"></datalist>
-  <div id="loadingRiwayat" class="loading-msg" style="display:none;">Memuat riwayat...</div>
-  <div class="ringkasan-jumlah" id="ringkasanRiwayat"></div>
-  <div id="contentRiwayat"></div>
-</div>
-
-<!-- ===== TAB 4: TERTUNDA ===== -->
-<div id="tabTertunda" style="display:none">
-  <div id="loadingTertunda" class="loading-msg">Memuat...</div>
-  <div class="ringkasan-jumlah" id="ringkasanTertunda"></div>
-  <div id="contentTertunda"></div>
-</div>
-
-<!-- ===== TAB 5: DASHBOARD ===== -->
-<div id="tabDashboard" style="display:none">
-  <div id="loadingDashboard" class="loading-msg">Memuat...</div>
-  <div id="contentDashboard"></div>
-</div>
-
-<!-- ===== TAB 6: CARI OBAT ===== -->
-<div id="tabCariObat" style="display:none">
-  <label class="field-label">Cari Nama Obat</label>
-  <input type="text" id="obatSearchInput" list="daftarObatDatalistMobile" placeholder="Ketik nama obat..." autocomplete="off">
-  <datalist id="daftarObatDatalistMobile"></datalist>
-
-  <div id="loadingCariObat" class="loading-msg" style="display:none; padding:20px;">Mencari...</div>
-  <div class="ringkasan-jumlah" id="ringkasanCariObat"></div>
-  <div id="contentCariObat"></div>
-</div>
-
-<!-- ===== TAB 7: TAMBAH JADWAL ===== -->
-<div id="tabTambah" style="display:none">
-  <label class="field-label">Nama Pasien</label>
-  <input type="text" id="tambahPatientSelect" list="patientDatalistTambah" placeholder="Ketik nama pasien (baru atau lama)..." autocomplete="off">
-  <datalist id="patientDatalistTambah"></datalist>
-  <div id="regimenInfo" style="font-size:12px; color:var(--muted); margin:-8px 0 14px;"></div>
-
-  <label class="field-label">Tanggal Kemo (Siklus Awal)</label>
-  <input type="date" id="tambahTanggal">
-  <div id="intervalWarning" style="display:none; font-size:12px; color:#FFB020; background:rgba(255,176,32,0.12); border:1px solid rgba(255,176,32,0.35); border-radius:8px; padding:8px 10px; margin:-8px 0 14px;"></div>
-
-  <div style="display:flex; gap:8px;">
-    <div style="flex:1;">
-      <label class="field-label">Siklus Awal</label>
-      <input type="text" id="tambahSiklusAwal" placeholder="cth: 3">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <div class="header">
+      <h1>💊 Jadwal Kemoterapi</h1>
+      <svg class="header-pulse" width="140" height="20" viewBox="0 0 140 20" fill="none">
+        <path d="M0 10 H45 L52 2 L60 18 L67 10 H140" stroke="#2FE6C9" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.7"/>
+      </svg>
     </div>
-    <div style="flex:1;">
-      <label class="field-label">Sampai Siklus</label>
-      <input type="text" id="tambahSiklusAkhir" placeholder="cth: 3">
+
+    <nav class="tabs">
+      <button class="tab-btn active" id="tabBtnKalender" onclick="switchTab('kalender')">🗓️ Kalender</button>
+      <button class="tab-btn" id="tabBtnRentang" onclick="switchTab('rentang')">📊 Rentang</button>
+      <button class="tab-btn" id="tabBtnRiwayat" onclick="switchTab('riwayat')">📋 Riwayat</button>
+      <button class="tab-btn" id="tabBtnTertunda" onclick="switchTab('tertunda')">⏸ Tertunda</button>
+      <button class="tab-btn" id="tabBtnDashboard" onclick="switchTab('dashboard')">📈 Dashboard</button>
+      <button class="tab-btn" id="tabBtnCariObat" onclick="switchTab('cariobat')">💊 Cari Obat</button>
+      <button class="tab-btn" id="tabBtnTambah" onclick="switchTab('tambah')">➕ Tambah</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="header-user"><span id="headerUserEmail"></span><button onclick="handleLogout()">Keluar</button></div>
     </div>
-  </div>
-  <label class="field-label">Interval (hari) <span style="font-weight:normal; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
-  <input type="number" id="tambahInterval" placeholder="cth: 21" min="1">
+  </aside>
 
-  <label class="field-label">Daftar Obat</label>
-  <div id="obatContainer"></div>
-  <button type="button" class="btn-secondary" onclick="tambahBarisObatKosong()" style="margin-bottom:16px;">+ Tambah Baris Obat</button>
-  <datalist id="daftarObatDatalistTambah"></datalist>
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content">
+    <div class="main-content-inner">
 
-  <button class="btn-primary" id="tambahSubmitBtn" onclick="submitTambahJadwal()">Simpan Jadwal</button>
-  <div class="status-msg" id="tambahStatus"></div>
+      <!-- ===== TAB 1: KALENDER ===== -->
+      <div id="tabKalender">
+        <div class="form-row-2">
+          <div>
+            <label class="field-label">Loncat ke Tanggal</label>
+            <input type="date" id="kalTanggalJump">
+          </div>
+          <div style="display:flex; align-items:flex-end;">
+            <button class="today-btn" onclick="kalKeHariIni()" style="margin-bottom:16px;">Kembali ke Hari Ini</button>
+          </div>
+        </div>
+
+        <div class="kal-nav">
+          <button onclick="gantiBulanKalender(-1)">‹</button>
+          <div class="kal-bulan-label" id="kalBulanLabel">Memuat...</div>
+          <button onclick="gantiBulanKalender(1)">›</button>
+        </div>
+        <div class="kal-grid" id="kalHariLabelRow"></div>
+        <div class="kal-grid" id="kalGrid" style="margin-top:4px;"></div>
+        <div id="loadingKalender" class="loading-msg">Memuat...</div>
+
+        <div id="kalDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
+        <div id="loadingKalDetail" class="loading-msg">Memuat jadwal...</div>
+        <div id="kalDetailContainer"></div>
+      </div>
+
+      <!-- ===== TAB 2: RENTANG ===== -->
+      <div id="tabRentang" style="display:none">
+        <div class="form-row-2">
+          <div>
+            <label class="field-label">Dari Tanggal</label>
+            <input type="date" id="rentangMulai">
+          </div>
+          <div>
+            <label class="field-label">Sampai Tanggal</label>
+            <input type="date" id="rentangAkhir" style="margin-bottom:12px;">
+          </div>
+        </div>
+        <button onclick="muatKebutuhanRentang()" class="btn-primary" style="margin-bottom:16px; max-width:260px;">Tampilkan Rekap</button>
+
+        <div id="loadingRentang" class="loading-msg" style="display:none;">Memuat...</div>
+        <div id="ringkasanRentang" class="ringkasan-jumlah"></div>
+        <div id="contentRentang"></div>
+      </div>
+
+      <!-- ===== TAB 3: RIWAYAT ===== -->
+      <div id="tabRiwayat" style="display:none">
+        <input type="text" id="patientSelect" list="patientDatalist" placeholder="Ketik nama pasien..." autocomplete="off">
+        <datalist id="patientDatalist"></datalist>
+        <div id="loadingRiwayat" class="loading-msg" style="display:none;">Memuat riwayat...</div>
+        <div class="ringkasan-jumlah" id="ringkasanRiwayat"></div>
+        <div id="contentRiwayat"></div>
+      </div>
+
+      <!-- ===== TAB 4: TERTUNDA ===== -->
+      <div id="tabTertunda" style="display:none">
+        <div id="loadingTertunda" class="loading-msg">Memuat...</div>
+        <div class="ringkasan-jumlah" id="ringkasanTertunda"></div>
+        <div id="contentTertunda"></div>
+      </div>
+
+      <!-- ===== TAB 5: DASHBOARD ===== -->
+      <div id="tabDashboard" style="display:none">
+        <div id="loadingDashboard" class="loading-msg">Memuat...</div>
+        <div id="contentDashboard"></div>
+      </div>
+
+      <!-- ===== TAB 6: CARI OBAT ===== -->
+      <div id="tabCariObat" style="display:none">
+        <label class="field-label">Cari Nama Obat</label>
+        <input type="text" id="obatSearchInput" list="daftarObatDatalistMobile" placeholder="Ketik nama obat..." autocomplete="off">
+        <datalist id="daftarObatDatalistMobile"></datalist>
+
+        <div id="loadingCariObat" class="loading-msg" style="display:none; padding:20px;">Mencari...</div>
+        <div class="ringkasan-jumlah" id="ringkasanCariObat"></div>
+        <div id="contentCariObat"></div>
+      </div>
+
+      <!-- ===== TAB 7: TAMBAH JADWAL ===== -->
+      <div id="tabTambah" style="display:none">
+        <label class="field-label">Nama Pasien</label>
+        <input type="text" id="tambahPatientSelect" list="patientDatalistTambah" placeholder="Ketik nama pasien (baru atau lama)..." autocomplete="off">
+        <datalist id="patientDatalistTambah"></datalist>
+        <div id="regimenInfo" style="font-size:12px; color:var(--muted); margin:-8px 0 14px;"></div>
+
+        <label class="field-label">Tanggal Kemo (Siklus Awal)</label>
+        <input type="date" id="tambahTanggal">
+        <div id="intervalWarning" style="display:none; font-size:12px; color:#FFB020; background:rgba(255,176,32,0.12); border:1px solid rgba(255,176,32,0.35); border-radius:8px; padding:8px 10px; margin:-8px 0 14px;"></div>
+
+        <div class="form-row-2">
+          <div>
+            <label class="field-label">Siklus Awal</label>
+            <input type="text" id="tambahSiklusAwal" placeholder="cth: 3">
+          </div>
+          <div>
+            <label class="field-label">Sampai Siklus</label>
+            <input type="text" id="tambahSiklusAkhir" placeholder="cth: 3">
+          </div>
+        </div>
+        <label class="field-label">Interval (hari) <span style="font-weight:normal; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
+        <input type="number" id="tambahInterval" placeholder="cth: 21" min="1">
+
+        <label class="field-label">Daftar Obat</label>
+        <div id="obatContainer"></div>
+        <button type="button" class="btn-secondary" onclick="tambahBarisObatKosong()" style="margin-bottom:16px;">+ Tambah Baris Obat</button>
+        <datalist id="daftarObatDatalistTambah"></datalist>
+
+        <button class="btn-primary" id="tambahSubmitBtn" onclick="submitTambahJadwal()" style="max-width:260px;">Simpan Jadwal</button>
+        <div class="status-msg" id="tambahStatus"></div>
+      </div>
+
+    </div>
+  </main>
+
 </div>
-
 </div><!-- /appScreen -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
