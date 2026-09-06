@@ -517,7 +517,7 @@ function hapusJadwalTanggal(i) {
 }
 
 // =====================================================================
-// TAB 2: KEBUTUHAN OBAT (dulu "Rentang Tanggal") — + Stok Masuk & Kebutuhan vs Stok
+// TAB 2: KEBUTUHAN OBAT (dulu "Rentang Tanggal") — + Update Stok & Kebutuhan vs Stok
 // =====================================================================
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
@@ -555,6 +555,9 @@ function muatKebutuhanRentang() {
       });
     });
 
+    // stokMap: dijumlahkan per obat. Karena submitUpdateStok() selalu menghapus
+    // entri lama sebelum menyimpan yang baru, dalam praktiknya per obat hanya
+    // ada SATU baris aktif di stock_entries — jadi angka ini = stok terkini.
     var stokMap = {};
     if (stokRes && !stokRes.error && stokRes.data) {
       stokRes.data.forEach(function (row) {
@@ -628,7 +631,7 @@ function renderStokRowsTable() {
     html += '<div class="obat-row">' +
       '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
       '<input type="date" data-i="' + i + '" data-f="tanggal" style="flex:1;" value="' + escapeHtml(item.tanggal || '') + '">' +
-      '<input type="number" data-i="' + i + '" data-f="jumlah" placeholder="Jumlah" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
+      '<input type="number" data-i="' + i + '" data-f="jumlah" placeholder="Stok saat ini" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
       '<button type="button" onclick="hapusBarisStok(' + i + ')">×</button></div>';
   });
   container.innerHTML = html;
@@ -643,30 +646,43 @@ function renderStokRowsTable() {
   });
 }
 
-function submitStokMasuk() {
+// Update Stok: nilai yang diinput = jumlah stok yang TERSEDIA SAAT INI untuk
+// obat tersebut. Ini MENGGANTIKAN (bukan menjumlahkan dengan) nilai stok lama.
+// Caranya: untuk tiap obat yang diupdate, hapus dulu semua baris stock_entries
+// lama untuk obat itu, baru simpan satu baris baru dengan jumlah terkini.
+function submitUpdateStok() {
   var statusEl = document.getElementById('stokMasukStatus');
   statusEl.className = 'status-msg';
   statusEl.textContent = '';
 
+  // jumlah 0 tetap dianggap valid (artinya stok obat tsb memang sedang habis)
   var valid = currentStokRows.filter(function (r) {
-    return (r.obat || '').trim() !== '' && r.tanggal && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) > 0;
+    return (r.obat || '').trim() !== '' && r.tanggal && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) >= 0;
   });
   if (valid.length === 0) {
     statusEl.className = 'status-msg error';
-    statusEl.textContent = 'Isi minimal satu baris stok (obat, tanggal, jumlah > 0) dengan benar.';
+    statusEl.textContent = 'Isi minimal satu baris (obat, tanggal, jumlah stok saat ini) dengan benar.';
     return;
   }
 
   document.getElementById('stokMasukSubmitBtn').disabled = true;
   statusEl.textContent = 'Menyimpan...';
 
-  var rows = valid.map(function (r) { return { obat: r.obat.trim(), tanggal: r.tanggal, jumlah: Number(r.jumlah) }; });
+  var deletePromises = valid.map(function (r) {
+    return sb.from('stock_entries').delete().ilike('obat', r.obat.trim());
+  });
 
-  sb.from('stock_entries').insert(rows).then(function (res) {
+  Promise.all(deletePromises).then(function (delResults) {
+    var failedDelete = delResults.find(function (r) { return r.error; });
+    if (failedDelete) throw failedDelete.error;
+
+    var rows = valid.map(function (r) { return { obat: r.obat.trim(), tanggal: r.tanggal, jumlah: Number(r.jumlah) }; });
+    return sb.from('stock_entries').insert(rows);
+  }).then(function (res) {
     document.getElementById('stokMasukSubmitBtn').disabled = false;
     if (res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
     statusEl.className = 'status-msg ok';
-    statusEl.textContent = 'Stok masuk tersimpan.';
+    statusEl.textContent = 'Stok berhasil diupdate.';
     currentStokRows = [{ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' }];
     renderStokRowsTable();
     invalidateCacheAndReload();
