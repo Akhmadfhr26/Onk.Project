@@ -319,11 +319,15 @@
       <!-- ===== TAB 2: KEBUTUHAN OBAT (dulu "Rentang") ===== -->
       <div id="tabRentang" style="display:none">
         <div class="card" style="margin-bottom:20px;">
-          <div class="nama" style="font-size:14px;">Tambah Stok Masuk</div>
+          <div class="nama" style="font-size:14px;">Update Stok</div>
+          <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">
+            Isi jumlah stok yang <strong>TERSEDIA SAAT INI</strong> untuk tiap obat. Nilai ini akan
+            MENGGANTIKAN (bukan menambah) jumlah stok lama untuk obat yang sama.
+          </div>
           <div id="stokRowsContainer"></div>
           <div style="display:flex; gap:8px; margin-bottom:8px;">
-            <button type="button" class="btn-secondary" onclick="tambahBarisStokKosong()">+ Tambah Baris Stok</button>
-            <button type="button" class="btn-primary" id="stokMasukSubmitBtn" onclick="submitStokMasuk()" style="max-width:200px; margin-bottom:0;">Simpan Stok Masuk</button>
+            <button type="button" class="btn-secondary" onclick="tambahBarisStokKosong()">+ Tambah Baris Obat</button>
+            <button type="button" class="btn-primary" id="stokMasukSubmitBtn" onclick="submitUpdateStok()" style="max-width:200px; margin-bottom:0;">Update Stok</button>
           </div>
           <div class="status-msg" id="stokMasukStatus"></div>
         </div>
