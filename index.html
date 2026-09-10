@@ -189,6 +189,10 @@
   #loginScreen button.primary:disabled { opacity: 0.6; }
   #appScreen { display: none; }
 
+  /* Menu berbeda per role: depo (default) vs perawat */
+  body:not(.role-perawat) .perawat-only { display: none !important; }
+  body.role-perawat .depo-only { display: none !important; }
+
   /* Extra: obat row builder for Daftarkan Pasien tab */
   .obat-row { display: flex; gap: 6px; margin-bottom: 8px; }
   .obat-row input { margin-bottom: 0; }
@@ -272,13 +276,16 @@
     </div>
 
     <nav class="tabs">
-      <button class="tab-btn active" id="tabBtnKalender" onclick="switchTab('kalender')">🗓️ Kalender</button>
-      <button class="tab-btn" id="tabBtnRentang" onclick="switchTab('rentang')">📊 Kebutuhan Obat</button>
-      <button class="tab-btn" id="tabBtnRiwayat" onclick="switchTab('riwayat')">📋 Daftar Pasien</button>
-      <button class="tab-btn" id="tabBtnTertunda" onclick="switchTab('tertunda')">⏸ Tertunda</button>
-      <button class="tab-btn" id="tabBtnDashboard" onclick="switchTab('dashboard')">📈 Dashboard</button>
-      <button class="tab-btn" id="tabBtnCariObat" onclick="switchTab('cariobat')">💊 Cari Obat</button>
-      <button class="tab-btn" id="tabBtnTambah" onclick="switchTab('tambah')">➕ Daftarkan Pasien</button>
+      <button class="tab-btn active depo-only" id="tabBtnKalender" onclick="switchTab('kalender')">🗓️ Kalender</button>
+      <button class="tab-btn depo-only" id="tabBtnRentang" onclick="switchTab('rentang')">📊 Kebutuhan Obat</button>
+      <button class="tab-btn depo-only" id="tabBtnRiwayat" onclick="switchTab('riwayat')">📋 Daftar Pasien</button>
+      <button class="tab-btn depo-only" id="tabBtnTertunda" onclick="switchTab('tertunda')">⏸ Tertunda</button>
+      <button class="tab-btn depo-only" id="tabBtnDashboard" onclick="switchTab('dashboard')">📈 Dashboard</button>
+      <button class="tab-btn depo-only" id="tabBtnCariObat" onclick="switchTab('cariobat')">💊 Cari Obat</button>
+      <button class="tab-btn depo-only" id="tabBtnTambah" onclick="switchTab('tambah')">➕ Daftarkan Pasien</button>
+
+      <button class="tab-btn perawat-only active" id="tabBtnKalenderPerawat" onclick="switchTab('kalenderperawat')">🗓️ Kalender</button>
+      <button class="tab-btn perawat-only" id="tabBtnInputPerawat" onclick="switchTab('inputperawat')">➕ Input Data</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -452,6 +459,63 @@
 
         <button class="btn-primary" id="tambahSubmitBtn" onclick="submitTambahJadwal()" style="max-width:260px;">Simpan Jadwal</button>
         <div class="status-msg" id="tambahStatus"></div>
+      </div>
+
+      <!-- ===== AKUN PERAWAT — TAB A: KALENDER (data terpisah, tabel input_perawat) ===== -->
+      <div id="tabKalenderPerawat" style="display:none">
+        <div class="form-row-2">
+          <div>
+            <label class="field-label">Loncat ke Tanggal</label>
+            <input type="date" id="kalPerawatTanggalJump">
+          </div>
+          <div style="display:flex; align-items:flex-end;">
+            <button class="today-btn" onclick="kalPerawatKeHariIni()" style="margin-bottom:16px;">Kembali ke Hari Ini</button>
+          </div>
+        </div>
+
+        <div class="kal-nav">
+          <button onclick="gantiBulanKalenderPerawat(-1)">‹</button>
+          <div class="kal-bulan-label" id="kalPerawatBulanLabel">Memuat...</div>
+          <button onclick="gantiBulanKalenderPerawat(1)">›</button>
+        </div>
+        <div class="kal-grid" id="kalPerawatHariLabelRow"></div>
+        <div class="kal-grid" id="kalPerawatGrid" style="margin-top:4px;"></div>
+        <div id="loadingKalenderPerawat" class="loading-msg">Memuat...</div>
+
+        <div id="kalPerawatDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
+        <div id="kalPerawatDetailContainer"></div>
+      </div>
+
+      <!-- ===== AKUN PERAWAT — TAB B: INPUT DATA ===== -->
+      <div id="tabInputPerawat" style="display:none">
+        <label class="field-label">Nama Pasien</label>
+        <input type="text" id="perawatNamaPasien" placeholder="Nama lengkap pasien" autocomplete="off">
+
+        <label class="field-label">No. RM</label>
+        <input type="text" id="perawatNoRm" placeholder="Nomor rekam medis" autocomplete="off">
+
+        <label class="field-label">DPJP</label>
+        <input type="text" id="perawatDpjp" placeholder="Dokter penanggung jawab" autocomplete="off">
+
+        <label class="field-label">Diagnosa</label>
+        <input type="text" id="perawatDiagnosa" placeholder="Diagnosa" autocomplete="off">
+
+        <div class="form-row-2">
+          <div>
+            <label class="field-label">Siklus</label>
+            <input type="text" id="perawatSiklus" placeholder="cth: 3">
+          </div>
+          <div>
+            <label class="field-label">Interval (hari)</label>
+            <input type="number" id="perawatInterval" placeholder="cth: 21" min="1">
+          </div>
+        </div>
+
+        <label class="field-label">Tanggal Kemo</label>
+        <input type="date" id="perawatTanggalKemo">
+
+        <button class="btn-primary" id="perawatSubmitBtn" onclick="submitInputPerawat()" style="max-width:260px;">Simpan Data</button>
+        <div class="status-msg" id="inputPerawatStatus"></div>
       </div>
 
     </div>
