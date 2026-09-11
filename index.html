@@ -288,7 +288,7 @@
 
       <div class="sidebar-section-label" id="sidebarLabelPerawat">Perawat</div>
       <button class="tab-btn" id="tabBtnKalenderPerawat" onclick="switchTab('kalenderPerawat')">🗓️ Kalender</button>
-      <button class="tab-btn" id="tabBtnRiwayatPerawat" onclick="switchTab('riwayatPerawat')">📋 Riwayat Pasien</button>
+      <button class="tab-btn" id="tabBtnRiwayatPerawat" onclick="switchTab('riwayatPerawat')">📋 List Pasien Kemoterapi</button>
       <button class="tab-btn" id="tabBtnTambahPerawat" onclick="switchTab('tambahPerawat')">➕ Daftarkan Pasien</button>
     </nav>
 
@@ -489,7 +489,7 @@
         <div id="kalPerawatDetailContainer"></div>
       </div>
 
-      <!-- ===== TAB PERAWAT 2: RIWAYAT PASIEN ===== -->
+      <!-- ===== TAB PERAWAT 2: LIST PASIEN KEMOTERAPI ===== -->
       <div id="tabRiwayatPerawat" style="display:none">
 
         <div id="riwayatPerawatListWrap">
@@ -508,19 +508,24 @@
           <div class="card" style="margin-top:20px;">
             <div class="nama" style="font-size:14px;">Tambah Jadwal Baru</div>
 
-            <label class="field-label">Tanggal Mulai Kemo</label>
+            <label class="field-label">Tanggal Mulai Kemo (Siklus Awal)</label>
             <input type="date" id="riwayatPerawatTambahTanggal">
 
             <div class="form-row-2">
               <div>
-                <label class="field-label">Siklus</label>
+                <label class="field-label">Siklus Awal</label>
                 <input type="text" id="riwayatPerawatTambahSiklus" placeholder="cth: 3">
               </div>
               <div>
-                <label class="field-label">Lama Hari (Rawat Inap)</label>
-                <input type="number" id="riwayatPerawatTambahLamaHari" min="1" value="1">
+                <label class="field-label">Sampai Siklus</label>
+                <input type="text" id="riwayatPerawatTambahSiklusAkhir" placeholder="cth: 3">
               </div>
             </div>
+            <label class="field-label">Interval Antar Siklus (hari) <span style="font-weight:normal; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
+            <input type="number" id="riwayatPerawatTambahInterval" placeholder="cth: 21" min="1">
+
+            <label class="field-label">Lama Hari (Rawat Inap per Siklus)</label>
+            <input type="number" id="riwayatPerawatTambahLamaHari" min="1" value="1">
 
             <button class="btn-primary" id="riwayatPerawatTambahSubmitBtn" onclick="submitTambahJadwalRiwayatPerawat()" style="max-width:260px;">Simpan Jadwal</button>
             <div class="status-msg" id="riwayatPerawatTambahStatus"></div>
@@ -550,19 +555,25 @@
         <label class="field-label">Diagnosa</label>
         <input type="text" id="tambahPerawatDiagnosa" placeholder="Diagnosa pasien">
 
-        <label class="field-label">Tanggal Mulai Kemoterapi</label>
+        <label class="field-label">Tanggal Mulai Kemoterapi (Siklus Awal)</label>
         <input type="date" id="tambahPerawatTanggal">
 
         <div class="form-row-2">
           <div>
-            <label class="field-label">Siklus</label>
+            <label class="field-label">Siklus Awal</label>
             <input type="text" id="tambahPerawatSiklus" placeholder="cth: 1">
           </div>
           <div>
-            <label class="field-label">Lama Hari (Rawat Inap)</label>
-            <input type="number" id="tambahPerawatLamaHari" min="1" value="1">
+            <label class="field-label">Sampai Siklus <span style="font-weight:normal; color:var(--muted);">(opsional)</span></label>
+            <input type="text" id="tambahPerawatSiklusAkhir" placeholder="cth: 4 — kosongkan jika 1 siklus">
           </div>
         </div>
+
+        <label class="field-label">Interval Antar Siklus (hari) <span style="font-weight:normal; color:var(--muted);">— wajib diisi kalau membuat lebih dari 1 siklus sekaligus</span></label>
+        <input type="number" id="tambahPerawatInterval" placeholder="cth: 21" min="1">
+
+        <label class="field-label">Lama Hari (Rawat Inap per Siklus)</label>
+        <input type="number" id="tambahPerawatLamaHari" min="1" value="1">
 
         <button class="btn-primary" id="tambahPerawatSubmitBtn" onclick="submitTambahPasienPerawat()" style="max-width:260px;">Simpan Jadwal</button>
         <div class="status-msg" id="tambahPerawatStatus"></div>
