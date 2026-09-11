@@ -4,6 +4,16 @@
 // Data farmasi (patients/schedules/...) dan data perawat
 // (nurse_patients/nurse_schedules) disimpan di tabel yang BERBEDA dan
 // diproteksi RLS berbasis role (lihat migrasi_role_dan_perawat.sql).
+//
+// PERUBAHAN PADA VERSI INI:
+// - Tab "Riwayat Pasien" perawat sekarang tampil sebagai "List Pasien
+//   Kemoterapi" di sidebar (lihat index.html). ID/fungsi JS tidak
+//   diubah supaya tidak perlu migrasi apa pun.
+// - Form "Daftarkan Pasien" perawat sekarang mendukung multi-siklus:
+//   isi "Siklus Awal", "Sampai Siklus", dan "Interval (hari)" untuk
+//   otomatis membuat beberapa baris nurse_schedules sekaligus,
+//   masing-masing berjarak `interval` hari — langsung muncul di
+//   kalender perawat.
 // =====================================================================
 
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
@@ -129,7 +139,7 @@ function handleLogout() {
 // ROLE -> MENU
 // depo   : tab farmasi (kalender, kebutuhan obat, daftar pasien, tertunda,
 //          dashboard, cari obat, daftarkan pasien)
-// perawat: tab perawat (kalender perawat, riwayat pasien perawat,
+// perawat: tab perawat (kalender perawat, list pasien kemoterapi perawat,
 //          daftarkan pasien perawat)
 // admin  : semua tab di atas sekaligus
 // =====================================================================
@@ -292,6 +302,38 @@ function simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklu
       if (r2.error) throw r2.error;
       return scheduleIds.length;
     });
+  });
+}
+
+// =====================================================================
+// Simpan beberapa siklus jadwal RAWAT INAP PERAWAT sekaligus
+// (nurse_schedules) — dipakai oleh tab "Daftarkan Pasien" perawat dan
+// form Tambah Jadwal Baru di "List Pasien Kemoterapi" perawat.
+// Setiap siklus dibuat sebagai satu baris nurse_schedules dengan
+// tanggal_mulai berjarak `interval` hari dari siklus sebelumnya, dan
+// otomatis muncul di kalender perawat sesuai lama_hari-nya masing-masing.
+// =====================================================================
+function simpanBeberapaSiklusJadwalPerawat(patientId, tanggalMulaiObj, siklusAwal, siklusAkhir, interval, lamaHari) {
+  var siklusAwalNum = parseInt(siklusAwal, 10);
+  var siklusAkhirNum = parseInt(siklusAkhir, 10);
+  var totalSiklus = (!isNaN(siklusAwalNum) && !isNaN(siklusAkhirNum)) ? (siklusAkhirNum - siklusAwalNum + 1) : 1;
+  if (totalSiklus < 1) totalSiklus = 1;
+
+  var scheduleInserts = [];
+  for (var c = 0; c < totalSiklus; c++) {
+    var tglSiklus = new Date(tanggalMulaiObj.getTime() + c * (interval || 0) * 86400000);
+    var siklusLabel = isNaN(siklusAwalNum) ? siklusAwal : String(siklusAwalNum + c);
+    scheduleInserts.push({
+      patient_id: patientId,
+      tanggal_mulai: toIsoDate(tglSiklus),
+      siklus: siklusLabel,
+      lama_hari: lamaHari || 1
+    });
+  }
+
+  return sb.from('nurse_schedules').insert(scheduleInserts).then(function (res) {
+    if (res.error) throw res.error;
+    return scheduleInserts.length;
   });
 }
 
@@ -1851,7 +1893,9 @@ function hapusJadwalPerawatDariKalender(i) {
 }
 
 // ---------------------------------------------------------------------
-// TAB PERAWAT 2: RIWAYAT PASIEN
+// TAB PERAWAT 2: LIST PASIEN KEMOTERAPI
+// (dulu bernama "Riwayat Pasien" — ID/fungsi JS tidak diubah, hanya
+// label yang tampil ke user diganti di index.html)
 // ---------------------------------------------------------------------
 function muatDaftarPasienPerawat() {
   document.getElementById('loadingRiwayatPerawatList').style.display = 'block';
@@ -2035,6 +2079,11 @@ function siapkanFormTambahRiwayatPerawat(nama, mineSortedAsc) {
   document.getElementById('riwayatPerawatTambahLamaHari').value = '1';
   document.getElementById('riwayatPerawatTambahSiklus').value = '';
 
+  var elSiklusAkhir = document.getElementById('riwayatPerawatTambahSiklusAkhir');
+  if (elSiklusAkhir) elSiklusAkhir.value = '';
+  var elInterval = document.getElementById('riwayatPerawatTambahInterval');
+  if (elInterval) elInterval.value = '';
+
   if (mineSortedAsc && mineSortedAsc.length > 0) {
     var last = mineSortedAsc[mineSortedAsc.length - 1];
     var siklusNum = parseInt(last.siklus, 10);
@@ -2049,7 +2098,11 @@ function submitTambahJadwalRiwayatPerawat() {
   if (!nama) return;
 
   var isoTanggal = document.getElementById('riwayatPerawatTambahTanggal').value;
-  var siklus = document.getElementById('riwayatPerawatTambahSiklus').value.trim();
+  var siklusAwal = document.getElementById('riwayatPerawatTambahSiklus').value.trim() || '1';
+  var elSiklusAkhir = document.getElementById('riwayatPerawatTambahSiklusAkhir');
+  var siklusAkhir = (elSiklusAkhir ? elSiklusAkhir.value.trim() : '') || siklusAwal;
+  var elInterval = document.getElementById('riwayatPerawatTambahInterval');
+  var interval = elInterval ? parseInt(elInterval.value, 10) : NaN;
   var lamaHari = parseInt(document.getElementById('riwayatPerawatTambahLamaHari').value, 10) || 1;
   var statusEl = document.getElementById('riwayatPerawatTambahStatus');
   statusEl.className = 'status-msg';
@@ -2057,20 +2110,29 @@ function submitTambahJadwalRiwayatPerawat() {
 
   if (!isoTanggal) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Tanggal mulai wajib diisi.'; return; }
 
+  var siklusAwalNum = parseInt(siklusAwal, 10);
+  var siklusAkhirNum = parseInt(siklusAkhir, 10);
+  var totalSiklusCek = (!isNaN(siklusAwalNum) && !isNaN(siklusAkhirNum)) ? (siklusAkhirNum - siklusAwalNum + 1) : 1;
+  if (totalSiklusCek > 1 && (!interval || interval < 1)) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Interval (hari) wajib diisi untuk membuat lebih dari 1 siklus sekaligus.';
+    return;
+  }
+
   document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = true;
   statusEl.textContent = 'Menyimpan...';
 
+  var tanggalMulaiObj = new Date(isoTanggal + 'T00:00:00');
+
   sb.from('nurse_patients').select('id').ilike('nama', nama).maybeSingle().then(function (res) {
     if (!res.data) throw new Error('Data pasien tidak ditemukan.');
-    return sb.from('nurse_schedules').insert({
-      patient_id: res.data.id, tanggal_mulai: isoTanggal, siklus: siklus, lama_hari: lamaHari
-    });
-  }).then(function (res) {
-    if (res.error) throw res.error;
+    return simpanBeberapaSiklusJadwalPerawat(res.data.id, tanggalMulaiObj, siklusAwal, siklusAkhir, interval, lamaHari);
+  }).then(function (jumlahSiklusDibuat) {
     document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = false;
     statusEl.className = 'status-msg ok';
-    statusEl.textContent = 'Berhasil disimpan.';
+    statusEl.textContent = 'Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.';
     invalidateNurseCacheAndReload();
+    if (elSiklusAkhir) elSiklusAkhir.value = '';
     muatRiwayatPasienDetailPerawat(nama);
   }).catch(function (err) {
     document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = false;
@@ -2102,6 +2164,8 @@ if (elTambahPerawatNama) {
     var nama = this.value.trim();
     var infoEl = document.getElementById('regimenInfoPerawat');
     infoEl.innerHTML = '';
+    var elSiklusAkhir = document.getElementById('tambahPerawatSiklusAkhir');
+    if (elSiklusAkhir) elSiklusAkhir.value = '';
     if (!nama) return;
 
     sb.from('nurse_patients').select('id, no_rm, diagnosa, dpjp').ilike('nama', nama).maybeSingle().then(function (res) {
@@ -2117,13 +2181,21 @@ if (elTambahPerawatNama) {
   });
 }
 
+// Simpan pasien baru/lama perawat + jadwal, mendukung multi-siklus
+// otomatis (Siklus Awal -> Sampai Siklus, berjarak `Interval` hari),
+// masing-masing langsung tercatat di nurse_schedules dan otomatis
+// muncul di kalender perawat.
 function submitTambahPasienPerawat() {
   var nama = document.getElementById('tambahPerawatNama').value.trim();
   var noRm = document.getElementById('tambahPerawatNoRm').value.trim();
   var diagnosa = document.getElementById('tambahPerawatDiagnosa').value.trim();
   var dpjp = document.getElementById('tambahPerawatDpjp').value.trim();
   var isoTanggal = document.getElementById('tambahPerawatTanggal').value;
-  var siklus = document.getElementById('tambahPerawatSiklus').value.trim();
+  var siklusAwal = document.getElementById('tambahPerawatSiklus').value.trim() || '1';
+  var elSiklusAkhir = document.getElementById('tambahPerawatSiklusAkhir');
+  var siklusAkhir = (elSiklusAkhir ? elSiklusAkhir.value.trim() : '') || siklusAwal;
+  var elInterval = document.getElementById('tambahPerawatInterval');
+  var interval = elInterval ? parseInt(elInterval.value, 10) : NaN;
   var lamaHari = parseInt(document.getElementById('tambahPerawatLamaHari').value, 10) || 1;
   var statusEl = document.getElementById('tambahPerawatStatus');
   statusEl.className = 'status-msg';
@@ -2135,8 +2207,20 @@ function submitTambahPasienPerawat() {
     return;
   }
 
+  // Validasi interval kalau bikin lebih dari 1 siklus sekaligus
+  var siklusAwalNum = parseInt(siklusAwal, 10);
+  var siklusAkhirNum = parseInt(siklusAkhir, 10);
+  var totalSiklus = (!isNaN(siklusAwalNum) && !isNaN(siklusAkhirNum)) ? (siklusAkhirNum - siklusAwalNum + 1) : 1;
+  if (totalSiklus > 1 && (!interval || interval < 1)) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Interval (hari) wajib diisi untuk membuat lebih dari 1 siklus sekaligus.';
+    return;
+  }
+
   document.getElementById('tambahPerawatSubmitBtn').disabled = true;
   statusEl.textContent = 'Menyimpan...';
+
+  var tanggalMulaiObj = new Date(isoTanggal + 'T00:00:00');
 
   sb.from('nurse_patients').select('id').ilike('nama', nama).maybeSingle().then(function (res) {
     if (res.data) {
@@ -2151,16 +2235,14 @@ function submitTambahPasienPerawat() {
       return r.data.id;
     });
   }).then(function (patientId) {
-    return sb.from('nurse_schedules').insert({
-      patient_id: patientId, tanggal_mulai: isoTanggal, siklus: siklus, lama_hari: lamaHari
-    });
-  }).then(function (res) {
-    if (res.error) throw res.error;
+    return simpanBeberapaSiklusJadwalPerawat(patientId, tanggalMulaiObj, siklusAwal, siklusAkhir, interval, lamaHari);
+  }).then(function (jumlahSiklusDibuat) {
     document.getElementById('tambahPerawatSubmitBtn').disabled = false;
     statusEl.className = 'status-msg ok';
-    statusEl.textContent = 'Berhasil! Jadwal tersimpan.';
+    statusEl.textContent = 'Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.';
     invalidateNurseCacheAndReload();
     document.getElementById('tambahPerawatSiklus').value = '';
+    if (elSiklusAkhir) elSiklusAkhir.value = '';
   }).catch(function (err) {
     document.getElementById('tambahPerawatSubmitBtn').disabled = false;
     statusEl.className = 'status-msg error';
