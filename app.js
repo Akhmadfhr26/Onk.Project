@@ -1262,24 +1262,75 @@ function muatDashboard() {
   document.getElementById('loadingDashboard').style.display = 'block';
   document.getElementById('contentDashboard').innerHTML = '';
 
-  Promise.all([loadAllSchedules(), sb.from('v_patient_summary').select('nama, perkiraan_kemo_berikutnya')]).then(function (results) {
+  Promise.all([
+    loadAllSchedules(),
+    sb.from('v_patient_summary').select('nama, perkiraan_kemo_berikutnya'),
+    sb.from('stock_entries').select('obat, jumlah')
+  ]).then(function (results) {
     var list = results[0];
     var summaryRes = results[1];
+    var stokRes = results[2];
     dashboardDimuat = true;
     document.getElementById('loadingDashboard').style.display = 'none';
 
     var hariIni = dateOnly(new Date());
+    var besok = new Date(hariIni.getTime() + 86400000);
+    var akhir7Hari = new Date(hariIni.getTime() + 6 * 86400000);
     var awalMinggu = new Date(hariIni.getTime() - 6 * 86400000);
     var awalBulan = new Date(hariIni.getFullYear(), hariIni.getMonth(), 1);
     var akhirBulan = new Date(hariIni.getFullYear(), hariIni.getMonth() + 1, 0);
 
     var pasienMinggu = {}, pasienBulan = {}, tertundaSet = {};
+    var kebutuhan7Hari = {};
     list.forEach(function (s) {
       var d = dateOnly(s.dateObj);
       if (d.getTime() >= awalMinggu.getTime() && d.getTime() <= hariIni.getTime()) pasienMinggu[s.nama] = true;
       if (d.getTime() >= awalBulan.getTime() && d.getTime() <= akhirBulan.getTime()) pasienBulan[s.nama] = true;
       if (s.keterangan.toLowerCase().indexOf('tertunda') !== -1) tertundaSet[s.nama + '|' + s.tanggal] = true;
+
+      // Kumpulkan kebutuhan obat 7 hari ke depan (hari ini s/d +6 hari) untuk cek stok kritis
+      if (d.getTime() >= hariIni.getTime() && d.getTime() <= akhir7Hari.getTime()) {
+        s.items.forEach(function (it) {
+          var key = it.obat.toLowerCase();
+          if (!kebutuhan7Hari[key]) kebutuhan7Hari[key] = { obat: it.obat, totalJumlah: 0 };
+          kebutuhan7Hari[key].totalJumlah += it.jumlah;
+        });
+      }
     });
+
+    // Stok kritis: obat yang stok saat ini < kebutuhan 7 hari ke depan
+    var stokMap = {};
+    if (stokRes && !stokRes.error && stokRes.data) {
+      stokRes.data.forEach(function (row) {
+        var key = (row.obat || '').toLowerCase();
+        stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+      });
+    }
+    var stokKritis = Object.keys(kebutuhan7Hari).map(function (k) {
+      var butuh = kebutuhan7Hari[k].totalJumlah;
+      var stok = stokMap[k] || 0;
+      return { obat: kebutuhan7Hari[k].obat, butuh: butuh, stok: stok, kurang: stok - butuh };
+    }).filter(function (item) { return item.kurang < 0; })
+      .sort(function (a, b) { return a.kurang - b.kurang; }); // paling kritis (paling negatif) di atas
+
+    // Ringkasan jadwal hari ini & besok
+    function ringkasJadwalTanggal(target) {
+      var arr = list.filter(function (s) { return dateOnly(s.dateObj).getTime() === target.getTime(); });
+      var totalObat = {};
+      arr.forEach(function (s) {
+        s.items.forEach(function (it) {
+          var key = it.obat.toLowerCase();
+          if (!totalObat[key]) totalObat[key] = { obat: it.obat, totalJumlah: 0 };
+          totalObat[key].totalJumlah += it.jumlah;
+        });
+      });
+      return {
+        jumlahPasien: arr.length,
+        totalObat: Object.keys(totalObat).map(function (k) { return totalObat[k]; }).sort(function (a, b) { return a.obat.localeCompare(b.obat); })
+      };
+    }
+    var ringkasanHariIni = ringkasJadwalTanggal(hariIni);
+    var ringkasanBesok = ringkasJadwalTanggal(besok);
 
     var pasienBerpotensiHilang = [];
     if (!summaryRes.error && summaryRes.data) {
@@ -1299,6 +1350,9 @@ function muatDashboard() {
       totalPasienMingguIni: Object.keys(pasienMinggu).length,
       totalPasienBulanIni: Object.keys(pasienBulan).length,
       totalTertunda: Object.keys(tertundaSet).length,
+      stokKritis: stokKritis,
+      ringkasanHariIni: ringkasanHariIni,
+      ringkasanBesok: ringkasanBesok,
       pasienBerpotensiHilang: pasienBerpotensiHilang
     });
     muatGrafikPasien(modeGrafikPasienAktif);
@@ -1314,6 +1368,50 @@ function renderDashboard(r) {
   html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:var(--success); font-family:var(--font-mono);">' + r.totalPasienBulanIni + '</div><div style="font-size:12px; color:var(--muted);">Pasien Bulan Ini</div></div>';
   html += '<div class="card" style="flex:1; text-align:center;"><div style="font-size:26px; font-weight:700; color:var(--danger); font-family:var(--font-mono);">' + r.totalTertunda + '</div><div style="font-size:12px; color:var(--muted);">Tertunda</div></div>';
   html += '</div>';
+
+  // ===== Ringkasan Jadwal Hari Ini & Besok =====
+  html += '<div style="display:flex; gap:10px; margin-bottom:14px;">';
+  html += '<div class="card" style="flex:1; margin-bottom:0;">';
+  html += '<div class="nama" style="font-size:14px; display:flex; justify-content:space-between; align-items:center;"><span>Jadwal Hari Ini</span><span style="font-family:var(--font-mono); color:var(--accent-dim); font-weight:700;">' + r.ringkasanHariIni.jumlahPasien + ' pasien</span></div>';
+  if (r.ringkasanHariIni.totalObat.length === 0) {
+    html += '<div style="font-size:12px; color:var(--muted);">Tidak ada jadwal.</div>';
+  } else {
+    r.ringkasanHariIni.totalObat.forEach(function (t) {
+      html += '<div class="obat-item"><span>' + escapeHtml(t.obat) + '</span><span class="obat-jumlah">' + t.totalJumlah + '</span></div>';
+    });
+  }
+  html += '</div>';
+
+  html += '<div class="card" style="flex:1; margin-bottom:0;">';
+  html += '<div class="nama" style="font-size:14px; display:flex; justify-content:space-between; align-items:center;"><span>Jadwal Besok</span><span style="font-family:var(--font-mono); color:var(--accent-dim); font-weight:700;">' + r.ringkasanBesok.jumlahPasien + ' pasien</span></div>';
+  if (r.ringkasanBesok.totalObat.length === 0) {
+    html += '<div style="font-size:12px; color:var(--muted);">Tidak ada jadwal.</div>';
+  } else {
+    r.ringkasanBesok.totalObat.forEach(function (t) {
+      html += '<div class="obat-item"><span>' + escapeHtml(t.obat) + '</span><span class="obat-jumlah">' + t.totalJumlah + '</span></div>';
+    });
+  }
+  html += '</div>';
+  html += '</div>';
+
+  // ===== Stok Obat Kritis (7 Hari ke Depan) =====
+  if (r.stokKritis.length > 0) {
+    html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--danger);">';
+    html += '<div class="nama" style="font-size:14px;">⚠️ Stok Obat Kritis (' + r.stokKritis.length + ')</div>';
+    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Stok saat ini tidak cukup untuk kebutuhan 7 hari ke depan &mdash; segera pesan.</div>';
+    r.stokKritis.forEach(function (item) {
+      html += '<div class="total-item" style="align-items:center;">' +
+        '<span>' + escapeHtml(item.obat) + '</span>' +
+        '<span style="text-align:right; color:var(--danger); font-weight:700;">Kurang ' + Math.abs(item.kurang) +
+        ' &middot; Butuh ' + item.butuh + ' &middot; Stok ' + item.stok + '</span></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--success);">';
+    html += '<div class="nama" style="font-size:14px;">✅ Stok Obat Aman</div>';
+    html += '<div style="font-size:12px; color:var(--muted);">Stok saat ini mencukupi kebutuhan 7 hari ke depan.</div>';
+    html += '</div>';
+  }
 
   html += '<div class="total-section"><h2>Jumlah Pasien Kemo</h2>';
   html += '<div style="display:flex; gap:8px; margin-bottom:12px;">';
