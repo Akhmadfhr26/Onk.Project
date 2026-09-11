@@ -272,7 +272,7 @@
   .form-row-2 { display: flex; gap: 16px; }
   .form-row-2 > div { flex: 1; }
 
-  /* Daftar Pasien: list nama pasien abjad + filter live */
+  /* Daftar Pasien / Cari Obat: list nama abjad + filter live */
   .pasien-list-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
     overflow: hidden;
@@ -479,15 +479,29 @@
         <div id="contentDashboard"></div>
       </div>
 
-      <!-- ===== TAB 6: CARI OBAT (FARMASI) ===== -->
+      <!-- ===== TAB 6: CARI OBAT (FARMASI) =====
+           Diperbaiki: sekarang mengikuti pola list -> detail, sama seperti
+           tab "Daftar Pasien". Begitu tab dibuka, muatDaftarObatUntukPencarian()
+           di app.js akan menampilkan SEMUA nama obat + stok saat ini di
+           #daftarObatCariObat (bisa difilter langsung lewat #obatSearchInput).
+           Klik salah satu obat -> pindah ke #cariObatDetailWrap yang berisi
+           jadwal pemakaian terdekat + riwayat pemakaian yang sudah lewat. -->
       <div id="tabCariObat" style="display:none">
-        <label class="field-label">Cari Nama Obat</label>
-        <input type="text" id="obatSearchInput" list="daftarObatDatalistMobile" placeholder="Ketik nama obat..." autocomplete="off">
-        <datalist id="daftarObatDatalistMobile"></datalist>
 
-        <div id="loadingCariObat" class="loading-msg" style="display:none; padding:20px;">Mencari...</div>
-        <div class="ringkasan-jumlah" id="ringkasanCariObat"></div>
-        <div id="contentCariObat"></div>
+        <div id="cariObatListWrap">
+          <input type="text" id="obatSearchInput" placeholder="Cari nama obat..." autocomplete="off">
+          <div id="loadingCariObatList" class="loading-msg" style="display:none;">Memuat daftar obat...</div>
+          <div id="daftarObatCariObat"></div>
+        </div>
+
+        <div id="cariObatDetailWrap" style="display:none">
+          <button type="button" class="btn-secondary" onclick="kembaliKeDaftarObat()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
+          <div id="cariObatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
+          <div id="loadingCariObat" class="loading-msg" style="display:none;">Memuat detail...</div>
+          <div class="ringkasan-jumlah" id="ringkasanCariObat"></div>
+          <div id="contentCariObat"></div>
+        </div>
+
       </div>
 
       <!-- ===== TAB 7: DAFTARKAN PASIEN (FARMASI) ===== -->
