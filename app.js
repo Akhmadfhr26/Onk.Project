@@ -1897,17 +1897,38 @@ function hapusJadwalPerawatDariKalender(i) {
 // (dulu bernama "Riwayat Pasien" — ID/fungsi JS tidak diubah, hanya
 // label yang tampil ke user diganti di index.html)
 // ---------------------------------------------------------------------
+// Memuat List Pasien Kemoterapi (perawat).
+// - Diurutkan abjad dari query ('nama'), langsung tampil begitu tab dibuka
+//   (tidak perlu diketik/dicari dulu).
+// - Hanya menampilkan pasien yang MASIH punya minimal 1 baris nurse_schedules
+//   (pasien yang seluruh jadwalnya sudah dihapus tidak ikut muncul).
+// - Menyimpan no_rm supaya bisa ikut dicari lewat kotak pencarian.
 function muatDaftarPasienPerawat() {
   document.getElementById('loadingRiwayatPerawatList').style.display = 'block';
-  sb.from('nurse_patients').select('nama').order('nama').then(function (res) {
+  Promise.all([
+    sb.from('nurse_patients').select('id, nama, no_rm').order('nama'),
+    loadAllNurseSchedules()
+  ]).then(function (results) {
+    var patientsRes = results[0];
+    var schedules = results[1];
     document.getElementById('loadingRiwayatPerawatList').style.display = 'none';
-    if (res.error) {
-      document.getElementById('daftarPasienRiwayatPerawat').innerHTML = 'Gagal memuat: ' + escapeHtml(res.error.message);
+    if (patientsRes.error) {
+      document.getElementById('daftarPasienRiwayatPerawat').innerHTML = 'Gagal memuat: ' + escapeHtml(patientsRes.error.message);
       return;
     }
     nursePatientListDimuat = true;
-    nurseAllPatientNames = res.data.map(function (row) { return row.nama; });
+
+    var idPasienBerjadwal = {};
+    schedules.forEach(function (s) { idPasienBerjadwal[s.patient_id] = true; });
+
+    nurseAllPatientNames = (patientsRes.data || [])
+      .filter(function (row) { return idPasienBerjadwal[row.id]; }) // buang pasien tanpa jadwal aktif
+      .map(function (row) { return { id: row.id, nama: row.nama, noRm: row.no_rm || '' }; });
+
     renderDaftarPasienRiwayatPerawat(document.getElementById('riwayatPerawatSearchInput').value);
+  }).catch(function (err) {
+    document.getElementById('loadingRiwayatPerawatList').style.display = 'none';
+    document.getElementById('daftarPasienRiwayatPerawat').innerHTML = 'Gagal memuat: ' + escapeHtml(err.message);
   });
 }
 
@@ -1915,7 +1936,10 @@ function renderDaftarPasienRiwayatPerawat(filter) {
   var container = document.getElementById('daftarPasienRiwayatPerawat');
   if (!container) return;
   var f = (filter || '').trim().toLowerCase();
-  var filtered = nurseAllPatientNames.filter(function (n) { return n.toLowerCase().indexOf(f) !== -1; });
+  // Cocokkan berdasarkan nama ATAU No. RM
+  var filtered = nurseAllPatientNames.filter(function (p) {
+    return p.nama.toLowerCase().indexOf(f) !== -1 || (p.noRm || '').toLowerCase().indexOf(f) !== -1;
+  });
 
   if (filtered.length === 0) {
     container.innerHTML = '<div class="empty">Tidak ada pasien yang cocok.</div>';
@@ -1923,8 +1947,10 @@ function renderDaftarPasienRiwayatPerawat(filter) {
   }
 
   var html = '<div class="pasien-list-card">';
-  filtered.forEach(function (nama, idx) {
-    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(nama) + '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
+  filtered.forEach(function (p, idx) {
+    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(p.nama) +
+      (p.noRm ? ' <span style="color:var(--muted); font-size:12px;">&middot; RM ' + escapeHtml(p.noRm) + '</span>' : '') +
+      '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
   });
   html += '</div>';
   container.innerHTML = html;
@@ -1932,7 +1958,7 @@ function renderDaftarPasienRiwayatPerawat(filter) {
   container.querySelectorAll('.pasien-item').forEach(function (el) {
     el.addEventListener('click', function () {
       var idx = parseInt(this.getAttribute('data-idx'), 10);
-      pilihPasienRiwayatPerawat(filtered[idx]);
+      pilihPasienRiwayatPerawat(filtered[idx].nama);
     });
   });
 }
@@ -1956,6 +1982,13 @@ function kembaliKeDaftarPasienPerawat() {
   nurseRiwayatPasienAktif = null;
   document.getElementById('riwayatPerawatDetailWrap').style.display = 'none';
   document.getElementById('riwayatPerawatListWrap').style.display = 'block';
+  // Kalau data sudah invalid (misal baru saja hapus jadwal terakhir pasien),
+  // muat ulang supaya pasien yang sudah tidak ada jadwalnya langsung hilang dari list.
+  if (!nursePatientListDimuat) {
+    muatDaftarPasienPerawat();
+  } else {
+    renderDaftarPasienRiwayatPerawat(document.getElementById('riwayatPerawatSearchInput').value);
+  }
 }
 
 function muatRiwayatPasienDetailPerawat(nama) {
