@@ -1,8 +1,9 @@
 // =====================================================================
 // Jadwal Kemoterapi — logika aplikasi (Supabase)
-// Menggantikan Kode_gs.txt (Google Apps Script) dengan query langsung ke
-// Supabase dari browser. Login wajib karena RLS di schema.sql mewajibkan
-// auth.role() = 'authenticated' untuk semua akses baca/tulis.
+// Versi dengan ROLE (depo / perawat / admin) + modul PERAWAT terpisah.
+// Data farmasi (patients/schedules/...) dan data perawat
+// (nurse_patients/nurse_schedules) disimpan di tabel yang BERBEDA dan
+// diproteksi RLS berbasis role (lihat migrasi_role_dan_perawat.sql).
 // =====================================================================
 
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
@@ -12,7 +13,7 @@ var NAMA_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli'
 var NAMA_BULAN_SINGKAT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 var HARI_SINGKAT = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
-// ---- state ----
+// ---- state (depo/farmasi) ----
 var tanggalAktif = new Date();
 var bulanKalenderAktif = new Date();
 var kalHariDataTerakhir = {};
@@ -27,25 +28,29 @@ var currentObatList = [];
 var pasienListTerakhirTertunda = [];
 var currentStokRows = [];
 
-// ---- state khusus tab Daftar Pasien (dulu "Riwayat") ----
+// ---- state khusus tab Daftar Pasien (dulu "Riwayat") — farmasi ----
 var allPatientNames = [];
 var riwayatPasienAktif = null;
 var pasienListTerakhirRiwayat = [];
 var currentObatListRiwayat = [];
 
-// cache: seluruh jadwal (schedules + items + nama pasien), dimuat sekali per sesi
-// lalu dipakai ulang oleh semua tab. dimuat ulang (invalidate) setelah ada perubahan data.
+// cache: seluruh jadwal farmasi (schedules + items + nama pasien)
 var allSchedulesCache = null;
 
-// ---- state khusus akun perawat (tabel input_perawat, terpisah dari schedules) ----
-var inputPerawatCache = null;
-var bulanKalenderPerawatAktif = new Date();
-var tanggalAktifPerawat = new Date();
-var kalPerawatHariDataTerakhir = {};
-
-// cache: daftar nama obat unik (dipakai bersama oleh datalist di tab Kebutuhan Obat,
-// Daftarkan Pasien, Daftar Pasien, dan Cari Obat) agar nama obat konsisten & tidak double.
+// cache: daftar nama obat unik (farmasi)
 var daftarNamaObatSharedCache = null;
+
+// ---- state (PERAWAT) — terpisah total dari state farmasi di atas ----
+var currentUserRole = null;
+var nurseTanggalAktif = new Date();
+var nurseBulanKalenderAktif = new Date();
+var nurseKalHariDataTerakhir = {};
+var nursePasienListTerakhirTanggal = [];
+var nursePatientListDimuat = false;
+var nurseAllPatientNames = [];
+var nurseRiwayatPasienAktif = null;
+var nursePasienListTerakhirRiwayat = [];
+var nurseAllSchedulesCache = null;
 
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function formatTampilan(d) { return NAMA_HARI[d.getDay()] + ', ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
@@ -58,7 +63,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ===== Status kemo (sama seperti hitungStatusJadwal_ di Apps Script) =====
+// ===== Status kemo (sama untuk farmasi & perawat) =====
 function hitungStatus(tanggalDate, keterangan) {
   var ket = (keterangan || '').toString().toLowerCase();
   if (ket.indexOf('tertunda') !== -1) return 'Tertunda';
@@ -82,15 +87,12 @@ function renderBadge(status) {
 // AUTH
 // =====================================================================
 // Pemetaan ID login sederhana -> akun Supabase asli.
-// Tambahkan baris baru di sini kalau mau bikin ID lain (misal untuk perawat/dokter lain).
+// Tambahkan baris baru di sini kalau mau bikin ID lain.
 var LOGIN_ID_MAP = {
   'depo': 'depo@klinik.local',
-  'perawat': 'perawat@klinik.local'
+  'perawat': 'perawat@klinik.local',
+  'admin': 'admin@klinik.local'
 };
-
-// Role ditentukan dari ID login yang dipakai (bukan dari tabel/metadata),
-// dipakai showApp() untuk menampilkan menu yang berbeda.
-var roleAktif = null; // 'depo' | 'perawat'
 
 function handleLogin() {
   var idInput = document.getElementById('loginEmail').value.trim();
@@ -99,8 +101,7 @@ function handleLogin() {
   errEl.textContent = '';
   if (!idInput || !password) { errEl.textContent = 'Isi ID dan kata sandi.'; return; }
 
-  var idKey = idInput.toLowerCase();
-  var email = LOGIN_ID_MAP[idKey];
+  var email = LOGIN_ID_MAP[idInput.toLowerCase()];
   if (!email) { errEl.textContent = 'ID tidak dikenali.'; return; }
 
   document.getElementById('loginBtn').disabled = true;
@@ -110,8 +111,6 @@ function handleLogin() {
     document.getElementById('loginBtn').disabled = false;
     document.getElementById('loginBtn').textContent = 'Masuk';
     if (res.error) { errEl.textContent = 'ID atau kata sandi salah.'; return; }
-    roleAktif = (idKey === 'perawat') ? 'perawat' : 'depo';
-    sessionStorage.setItem('roleAktif', roleAktif);
     showApp(res.data.user);
   });
 }
@@ -119,31 +118,76 @@ function handleLogin() {
 function handleLogout() {
   sb.auth.signOut().then(function () {
     allSchedulesCache = null;
+    nurseAllSchedulesCache = null;
+    currentUserRole = null;
     document.getElementById('appScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'block';
   });
+}
+
+// =====================================================================
+// ROLE -> MENU
+// depo   : tab farmasi (kalender, kebutuhan obat, daftar pasien, tertunda,
+//          dashboard, cari obat, daftarkan pasien)
+// perawat: tab perawat (kalender perawat, riwayat pasien perawat,
+//          daftarkan pasien perawat)
+// admin  : semua tab di atas sekaligus
+// =====================================================================
+var TAB_ROLES = {
+  kalender: ['depo', 'admin'],
+  rentang: ['depo', 'admin'],
+  riwayat: ['depo', 'admin'],
+  tertunda: ['depo', 'admin'],
+  dashboard: ['depo', 'admin'],
+  cariobat: ['depo', 'admin'],
+  tambah: ['depo', 'admin'],
+  kalenderPerawat: ['perawat', 'admin'],
+  riwayatPerawat: ['perawat', 'admin'],
+  tambahPerawat: ['perawat', 'admin']
+};
+
+function applyRoleUI(role) {
+  Object.keys(TAB_ROLES).forEach(function (t) {
+    var btn = document.getElementById('tabBtn' + capitalize(t));
+    if (btn) btn.style.display = (TAB_ROLES[t].indexOf(role) !== -1) ? '' : 'none';
+  });
+  var lblFarmasi = document.getElementById('sidebarLabelFarmasi');
+  var lblPerawat = document.getElementById('sidebarLabelPerawat');
+  if (lblFarmasi) lblFarmasi.style.display = (role === 'depo' || role === 'admin') ? '' : 'none';
+  if (lblPerawat) lblPerawat.style.display = (role === 'perawat' || role === 'admin') ? '' : 'none';
 }
 
 function showApp(user) {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'block';
   document.getElementById('headerUserEmail').textContent = user.email || '';
-  document.body.classList.toggle('role-perawat', roleAktif === 'perawat');
 
-  if (roleAktif === 'perawat') {
-    switchTab('kalenderperawat');
-    return;
-  }
-  tanggalAktif = new Date();
-  document.getElementById('kalTanggalJump').value = toIsoDate(tanggalAktif);
-  muatKalender();
-  muatDetailTanggal();
+  sb.from('profiles').select('role').eq('id', user.id).maybeSingle().then(function (res) {
+    if (res.error || !res.data) {
+      document.getElementById('headerUserEmail').textContent =
+        (user.email || '') + ' (role belum diset — hubungi admin)';
+      return;
+    }
+    currentUserRole = res.data.role;
+    applyRoleUI(currentUserRole);
+
+    tanggalAktif = new Date();
+    nurseTanggalAktif = new Date();
+    document.getElementById('kalTanggalJump').value = toIsoDate(tanggalAktif);
+    var kalPerawatJump = document.getElementById('kalPerawatTanggalJump');
+    if (kalPerawatJump) kalPerawatJump.value = toIsoDate(nurseTanggalAktif);
+
+    if (currentUserRole === 'perawat') {
+      switchTab('kalenderPerawat');
+    } else {
+      switchTab('kalender');
+    }
+  });
 }
 
 // Cek sesi saat halaman dibuka (biar tidak perlu login ulang tiap refresh)
 sb.auth.getSession().then(function (res) {
   if (res.data && res.data.session) {
-    roleAktif = sessionStorage.getItem('roleAktif') || 'depo';
     showApp(res.data.session.user);
   }
 });
@@ -152,7 +196,7 @@ document.getElementById('loginPassword').addEventListener('keydown', function (e
 });
 
 // =====================================================================
-// DATA LOADING — satu query besar, dipakai ulang oleh semua tab
+// DATA LOADING (FARMASI) — satu query besar, dipakai ulang oleh semua tab
 // =====================================================================
 function loadAllSchedules(forceReload) {
   if (allSchedulesCache && !forceReload) return Promise.resolve(allSchedulesCache);
@@ -190,9 +234,7 @@ function invalidateCacheAndReload() {
 }
 
 // =====================================================================
-// DAFTAR NAMA OBAT — sumber tunggal untuk semua datalist di seluruh tab,
-// supaya nama obat yang muncul saat mengetik selalu konsisten dan tidak
-// membuat entri ganda karena variasi penulisan.
+// DAFTAR NAMA OBAT — sumber tunggal untuk semua datalist obat (farmasi)
 // =====================================================================
 function muatDaftarNamaObat(forceReload) {
   if (daftarNamaObatSharedCache && !forceReload) return Promise.resolve(daftarNamaObatSharedCache);
@@ -221,8 +263,8 @@ function isiDatalistObat(idDatalist) {
 }
 
 // =====================================================================
-// Simpan beberapa siklus jadwal sekaligus — dipakai bersama oleh tab
-// "Daftarkan Pasien" dan form Tambah Jadwal Baru di dalam tab "Daftar Pasien".
+// Simpan beberapa siklus jadwal sekaligus (farmasi) — dipakai bersama
+// oleh tab "Daftarkan Pasien" dan form Tambah Jadwal Baru di "Daftar Pasien"
 // =====================================================================
 function simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklusAkhir, interval, obatValid) {
   var siklusAwalNum = parseInt(siklusAwal, 10);
@@ -254,13 +296,15 @@ function simpanBeberapaSiklusJadwal(patientId, tanggalAwalObj, siklusAwal, siklu
 }
 
 // =====================================================================
-// Tab switching
+// Tab switching (menangani tab farmasi + tab perawat)
 // =====================================================================
 function switchTab(nama) {
-  var tabs = ['rentang', 'riwayat', 'tertunda', 'dashboard', 'kalender', 'cariobat', 'tambah', 'kalenderperawat', 'inputperawat'];
+  var tabs = Object.keys(TAB_ROLES);
   tabs.forEach(function (t) {
-    document.getElementById('tab' + capitalize(t)).style.display = (nama === t) ? 'block' : 'none';
-    document.getElementById('tabBtn' + capitalize(t)).classList.toggle('active', nama === t);
+    var contentEl = document.getElementById('tab' + capitalize(t));
+    var btnEl = document.getElementById('tabBtn' + capitalize(t));
+    if (contentEl) contentEl.style.display = (nama === t) ? 'block' : 'none';
+    if (btnEl) btnEl.classList.toggle('active', nama === t);
   });
 
   if (nama === 'rentang') {
@@ -283,18 +327,18 @@ function switchTab(nama) {
   if (nama === 'kalender') muatKalender();
   if (nama === 'cariobat' && !obatDatalistDimuat) muatDaftarObatUntukPencarian();
   if (nama === 'tambah') muatDataUntukTambah();
-  if (nama === 'kalenderperawat') muatKalenderPerawat();
-  if (nama === 'inputperawat') muatFormInputPerawat();
+
+  if (nama === 'kalenderPerawat') muatKalenderPerawat();
+  if (nama === 'riwayatPerawat' && !nursePatientListDimuat) muatDaftarPasienPerawat();
+  if (nama === 'tambahPerawat') muatDataUntukTambahPerawat();
 }
 function capitalize(s) {
   if (s === 'cariobat') return 'CariObat';
-  if (s === 'kalenderperawat') return 'KalenderPerawat';
-  if (s === 'inputperawat') return 'InputPerawat';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // =====================================================================
-// TAB 1: KALENDER
+// TAB 1: KALENDER (FARMASI)
 // =====================================================================
 function kalKeHariIni() {
   tanggalAktif = new Date();
@@ -545,7 +589,7 @@ function hapusJadwalTanggal(i) {
 }
 
 // =====================================================================
-// TAB 2: KEBUTUHAN OBAT (dulu "Rentang Tanggal") — + Update Stok & Kebutuhan vs Stok
+// TAB 2: KEBUTUHAN OBAT (FARMASI)
 // =====================================================================
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
@@ -583,9 +627,6 @@ function muatKebutuhanRentang() {
       });
     });
 
-    // stokMap: dijumlahkan per obat. Karena submitUpdateStok() selalu menghapus
-    // entri lama sebelum menyimpan yang baru, dalam praktiknya per obat hanya
-    // ada SATU baris aktif di stock_entries — jadi angka ini = stok terkini.
     var stokMap = {};
     if (stokRes && !stokRes.error && stokRes.data) {
       stokRes.data.forEach(function (row) {
@@ -674,16 +715,11 @@ function renderStokRowsTable() {
   });
 }
 
-// Update Stok: nilai yang diinput = jumlah stok yang TERSEDIA SAAT INI untuk
-// obat tersebut. Ini MENGGANTIKAN (bukan menjumlahkan dengan) nilai stok lama.
-// Caranya: untuk tiap obat yang diupdate, hapus dulu semua baris stock_entries
-// lama untuk obat itu, baru simpan satu baris baru dengan jumlah terkini.
 function submitUpdateStok() {
   var statusEl = document.getElementById('stokMasukStatus');
   statusEl.className = 'status-msg';
   statusEl.textContent = '';
 
-  // jumlah 0 tetap dianggap valid (artinya stok obat tsb memang sedang habis)
   var valid = currentStokRows.filter(function (r) {
     return (r.obat || '').trim() !== '' && r.tanggal && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) >= 0;
   });
@@ -724,9 +760,7 @@ function submitUpdateStok() {
 }
 
 // =====================================================================
-// TAB 3: DAFTAR PASIEN (dulu "Riwayat")
-// Alur: daftar semua pasien (abjad + filter live) -> klik nama -> detail
-// riwayat (dengan ubah tanggal / hapus jadwal / tambah jadwal multi-siklus)
+// TAB 3: DAFTAR PASIEN (FARMASI)
 // =====================================================================
 function muatDaftarPasien() {
   document.getElementById('loadingRiwayatList').style.display = 'block';
@@ -795,7 +829,7 @@ function muatRiwayatPasienDetail(nama) {
   loadAllSchedules().then(function (list) {
     document.getElementById('loadingRiwayat').style.display = 'none';
     var mine = list.filter(function (s) { return s.nama.toLowerCase() === nama.toLowerCase(); });
-    mine.sort(function (a, b) { return a.dateObj.getTime() - b.dateObj.getTime(); }); // paling lama dulu
+    mine.sort(function (a, b) { return a.dateObj.getTime() - b.dateObj.getTime(); });
 
     pasienListTerakhirRiwayat = mine.map(function (s) {
       return { id: s.id, patient_id: s.patient_id, tanggal: s.tanggal, dateObj: s.dateObj, siklus: s.siklus, items: s.items, status: hitungStatus(s.dateObj, s.keterangan) };
@@ -873,8 +907,6 @@ function simpanUbahTanggalRiwayat(i) {
       list.forEach(function (s) {
         if (s.id === p.id) return;
         if (s.patient_id !== p.patient_id) return;
-        // hanya geser jadwal yang tanggalnya SETELAH tanggal lama (siklus berikutnya);
-        // jadwal sebelumnya tidak disentuh sama sekali.
         if (dateOnly(s.dateObj).getTime() > tanggalLamaObj.getTime()) {
           var geseredDate = new Date(s.dateObj.getTime() + deltaDays * 86400000);
           updates.push(sb.from('schedules').update({ tanggal: toIsoDate(geseredDate) }).eq('id', s.id));
@@ -912,7 +944,6 @@ function hapusJadwalRiwayat(i) {
   });
 }
 
-// ---- Form "Tambah Jadwal Baru" (multi-siklus) di dalam detail pasien ----
 function siapkanFormTambahRiwayat(nama, mineSortedAsc) {
   document.getElementById('riwayatTambahStatus').className = 'status-msg';
   document.getElementById('riwayatTambahStatus').textContent = '';
@@ -928,7 +959,7 @@ function siapkanFormTambahRiwayat(nama, mineSortedAsc) {
     return;
   }
 
-  var last = mineSortedAsc[mineSortedAsc.length - 1]; // paling baru
+  var last = mineSortedAsc[mineSortedAsc.length - 1];
   var siklusNum = parseInt(last.siklus, 10);
   document.getElementById('riwayatTambahSiklusAwal').value = isNaN(siklusNum) ? '' : (siklusNum + 1);
   currentObatListRiwayat = last.items.map(function (it) { return { obat: it.obat, jumlah: it.jumlah }; });
@@ -1016,7 +1047,7 @@ function submitTambahJadwalRiwayat() {
 }
 
 // =====================================================================
-// TAB 4: PASIEN TERTUNDA (batalkan tunda / ubah jadwal / hapus)
+// TAB 4: PASIEN TERTUNDA (FARMASI)
 // =====================================================================
 function muatPasienTertunda() {
   document.getElementById('loadingTertunda').style.display = 'block';
@@ -1142,8 +1173,6 @@ function simpanUbahTanggalTertunda(i) {
       list.forEach(function (row) {
         if (row.id === p.id) return;
         if (row.patient_id !== p.patient_id) return;
-        // hanya geser jadwal yang tanggalnya SETELAH tanggal lama (siklus berikutnya);
-        // jadwal sebelumnya tidak disentuh sama sekali.
         if (dateOnly(row.dateObj).getTime() > tanggalLamaObj.getTime()) {
           var geseredDate = new Date(row.dateObj.getTime() + deltaDays * 86400000);
           updates.push(sb.from('schedules').update({ tanggal: toIsoDate(geseredDate) }).eq('id', row.id));
@@ -1182,7 +1211,7 @@ function hapusJadwalTertunda(i) {
 }
 
 // =====================================================================
-// TAB 5: DASHBOARD
+// TAB 5: DASHBOARD (FARMASI)
 // =====================================================================
 function muatDashboard() {
   document.getElementById('loadingDashboard').style.display = 'block';
@@ -1344,7 +1373,7 @@ function renderGrafikPasien(data) {
 }
 
 // =====================================================================
-// TAB 6: CARI OBAT
+// TAB 6: CARI OBAT (FARMASI)
 // =====================================================================
 function muatDaftarObatUntukPencarian() {
   isiDatalistObat('daftarObatDatalistMobile').then(function () {
@@ -1394,7 +1423,7 @@ function renderHasilCariObat(res) {
 }
 
 // =====================================================================
-// TAB 7: DAFTARKAN PASIEN (dulu "Tambah Jadwal Baru")
+// TAB 7: DAFTARKAN PASIEN (FARMASI)
 // =====================================================================
 function muatDataUntukTambah() {
   sb.from('patients').select('nama').order('nama').then(function (res) {
@@ -1547,167 +1576,599 @@ function submitTambahJadwal() {
 }
 
 // =====================================================================
-// AKUN PERAWAT — TAB A: KALENDER (data dari tabel input_perawat)
 // =====================================================================
-function loadInputPerawat(forceReload) {
-  if (inputPerawatCache && !forceReload) return Promise.resolve(inputPerawatCache);
-  return sb.from('input_perawat')
-    .select('id, nama_pasien, no_rm, dpjp, diagnosa, siklus, interval_hari, tanggal_kemo')
+// MODUL PERAWAT — data terpisah total dari farmasi (nurse_patients /
+// nurse_schedules). Satu baris nurse_schedules = satu siklus rawat inap,
+// ditampilkan di kalender sebagai beberapa hari (H1, H2, ... Hn) sesuai
+// lama_hari.
+// =====================================================================
+// =====================================================================
+
+function loadAllNurseSchedules(forceReload) {
+  if (nurseAllSchedulesCache && !forceReload) return Promise.resolve(nurseAllSchedulesCache);
+
+  return sb.from('nurse_schedules')
+    .select('id, patient_id, tanggal_mulai, siklus, lama_hari, keterangan, nurse_patients(nama, no_rm, diagnosa, dpjp)')
     .then(function (res) {
       if (res.error) throw res.error;
       var list = (res.data || []).map(function (row) {
-        var parts = row.tanggal_kemo.split('-');
+        var parts = row.tanggal_mulai.split('-');
         var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
         return {
-          id: row.id, nama: row.nama_pasien, no_rm: row.no_rm || '', dpjp: row.dpjp || '',
-          diagnosa: row.diagnosa || '', siklus: row.siklus || '', interval_hari: row.interval_hari || null,
-          dateObj: d, tanggal: formatDDMMYYYY(d)
+          id: row.id,
+          patient_id: row.patient_id,
+          nama: row.nurse_patients ? row.nurse_patients.nama : '(tanpa nama)',
+          noRm: row.nurse_patients ? (row.nurse_patients.no_rm || '') : '',
+          diagnosa: row.nurse_patients ? (row.nurse_patients.diagnosa || '') : '',
+          dpjp: row.nurse_patients ? (row.nurse_patients.dpjp || '') : '',
+          dateObjMulai: d,
+          tanggalMulai: formatDDMMYYYY(d),
+          siklus: row.siklus || '',
+          lamaHari: row.lama_hari || 1,
+          keterangan: row.keterangan || ''
         };
       });
-      inputPerawatCache = list;
+      nurseAllSchedulesCache = list;
       return list;
     });
 }
 
-function gantiBulanKalenderPerawat(delta) {
-  bulanKalenderPerawatAktif.setMonth(bulanKalenderPerawatAktif.getMonth() + delta);
-  muatKalenderPerawat();
+function invalidateNurseCacheAndReload() {
+  nurseAllSchedulesCache = null;
+  nursePatientListDimuat = false;
 }
 
+// ---------------------------------------------------------------------
+// TAB PERAWAT 1: KALENDER
+// ---------------------------------------------------------------------
 function kalPerawatKeHariIni() {
-  tanggalAktifPerawat = new Date();
-  bulanKalenderPerawatAktif = new Date();
-  document.getElementById('kalPerawatTanggalJump').value = toIsoDate(tanggalAktifPerawat);
+  nurseTanggalAktif = new Date();
+  nurseBulanKalenderAktif = new Date();
+  document.getElementById('kalPerawatTanggalJump').value = toIsoDate(nurseTanggalAktif);
   muatKalenderPerawat();
   muatDetailTanggalPerawat();
 }
-document.getElementById('kalPerawatTanggalJump').addEventListener('change', function () {
-  var iso = this.value;
-  if (!iso) return;
-  var parts = iso.split('-');
-  tanggalAktifPerawat = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-  bulanKalenderPerawatAktif = new Date(tanggalAktifPerawat.getFullYear(), tanggalAktifPerawat.getMonth(), 1);
+var elKalPerawatJump = document.getElementById('kalPerawatTanggalJump');
+if (elKalPerawatJump) {
+  elKalPerawatJump.addEventListener('change', function () {
+    var iso = this.value;
+    if (!iso) return;
+    var parts = iso.split('-');
+    nurseTanggalAktif = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    nurseBulanKalenderAktif = new Date(nurseTanggalAktif.getFullYear(), nurseTanggalAktif.getMonth(), 1);
+    muatKalenderPerawat();
+    muatDetailTanggalPerawat();
+  });
+}
+
+function gantiBulanKalenderPerawat(delta) {
+  nurseBulanKalenderAktif.setMonth(nurseBulanKalenderAktif.getMonth() + delta);
   muatKalenderPerawat();
-  muatDetailTanggalPerawat();
-});
+}
 
 function muatKalenderPerawat() {
-  var tahun = bulanKalenderPerawatAktif.getFullYear();
-  var bulan = bulanKalenderPerawatAktif.getMonth() + 1;
+  var tahun = nurseBulanKalenderAktif.getFullYear();
+  var bulan = nurseBulanKalenderAktif.getMonth() + 1;
   document.getElementById('kalPerawatBulanLabel').innerText = NAMA_BULAN[bulan - 1] + ' ' + tahun;
   document.getElementById('loadingKalenderPerawat').style.display = 'block';
 
-  loadInputPerawat().then(function (list) {
+  loadAllNurseSchedules().then(function (list) {
     document.getElementById('loadingKalenderPerawat').style.display = 'none';
     var hariData = {};
     list.forEach(function (s) {
-      if (s.dateObj.getFullYear() !== tahun || (s.dateObj.getMonth() + 1) !== bulan) return;
-      var hari = s.dateObj.getDate();
-      if (!hariData[hari]) hariData[hari] = {};
-      var teks = s.siklus ? (s.nama + ' ' + s.siklus) : s.nama;
-      hariData[hari][teks] = true;
+      for (var h = 0; h < s.lamaHari; h++) {
+        var tglSel = new Date(s.dateObjMulai.getTime() + h * 86400000);
+        if (tglSel.getFullYear() !== tahun || (tglSel.getMonth() + 1) !== bulan) continue;
+        var hari = tglSel.getDate();
+        if (!hariData[hari]) hariData[hari] = { entriSet: {}, adaTertunda: false };
+        var teks = s.nama + (s.siklus ? (' — Siklus ' + s.siklus) : '') + ' (H' + (h + 1) + ')';
+        hariData[hari].entriSet[teks] = true;
+        if (s.keterangan.toLowerCase().indexOf('tertunda') !== -1) hariData[hari].adaTertunda = true;
+      }
     });
     var hasil = {};
-    Object.keys(hariData).forEach(function (h) { hasil[h] = Object.keys(hariData[h]).sort(); });
-    kalPerawatHariDataTerakhir = hasil;
+    Object.keys(hariData).forEach(function (h) {
+      hasil[h] = { daftarPasien: Object.keys(hariData[h].entriSet).sort(), adaTertunda: hariData[h].adaTertunda };
+    });
+    nurseKalHariDataTerakhir = hasil;
     renderKalenderPerawatGrid(tahun, bulan, hasil);
   }).catch(function (err) {
     document.getElementById('loadingKalenderPerawat').innerText = 'Gagal memuat: ' + err.message;
   });
-  muatDetailTanggalPerawat();
 }
 
 function renderKalenderPerawatGrid(tahun, bulan, hariData) {
   document.getElementById('kalPerawatHariLabelRow').innerHTML = HARI_SINGKAT.map(function (h) { return '<div class="kal-hari-label">' + h + '</div>'; }).join('');
+
   var jumlahHari = new Date(tahun, bulan, 0).getDate();
   var hariPertama = new Date(tahun, bulan - 1, 1).getDay();
   var hariIni = new Date();
   var isBulanIni = (hariIni.getFullYear() === tahun && (hariIni.getMonth() + 1) === bulan);
-  var isBulanTerpilih = (tanggalAktifPerawat.getFullYear() === tahun && (tanggalAktifPerawat.getMonth() + 1) === bulan);
+  var isBulanTerpilih = (nurseTanggalAktif.getFullYear() === tahun && (nurseTanggalAktif.getMonth() + 1) === bulan);
 
   var html = '';
   for (var i = 0; i < hariPertama; i++) html += '<div class="kal-cell kosong"></div>';
   for (var tgl = 1; tgl <= jumlahHari; tgl++) {
-    var daftar = hariData[tgl];
+    var info = hariData[tgl];
     var kelas = 'kal-cell';
-    if (daftar) kelas += ' ada-jadwal';
+    if (info) kelas += ' ada-jadwal';
+    if (info && info.adaTertunda) kelas += ' ada-tertunda';
     if (isBulanIni && hariIni.getDate() === tgl) kelas += ' hari-ini';
-    if (isBulanTerpilih && tanggalAktifPerawat.getDate() === tgl) kelas += ' terpilih';
+    if (isBulanTerpilih && nurseTanggalAktif.getDate() === tgl) kelas += ' terpilih';
+
     html += '<div class="' + kelas + '" onclick="pilihTanggalKalenderPerawat(' + tgl + ')"><div class="kal-tgl-num">' + tgl + '</div>';
-    if (daftar) daftar.forEach(function (entri) { html += '<div class="kal-entri">' + escapeHtml(entri) + '</div>'; });
+    if (info) info.daftarPasien.forEach(function (entri) { html += '<div class="kal-entri">' + escapeHtml(entri) + '</div>'; });
     html += '</div>';
   }
   document.getElementById('kalPerawatGrid').innerHTML = html;
 }
 
 function pilihTanggalKalenderPerawat(tgl) {
-  tanggalAktifPerawat = new Date(bulanKalenderPerawatAktif.getFullYear(), bulanKalenderPerawatAktif.getMonth(), tgl);
-  renderKalenderPerawatGrid(bulanKalenderPerawatAktif.getFullYear(), bulanKalenderPerawatAktif.getMonth() + 1, kalPerawatHariDataTerakhir);
+  nurseTanggalAktif = new Date(nurseBulanKalenderAktif.getFullYear(), nurseBulanKalenderAktif.getMonth(), tgl);
+  renderKalenderPerawatGrid(nurseBulanKalenderAktif.getFullYear(), nurseBulanKalenderAktif.getMonth() + 1, nurseKalHariDataTerakhir);
   muatDetailTanggalPerawat();
 }
 
 function muatDetailTanggalPerawat() {
-  document.getElementById('kalPerawatTanggalJump').value = toIsoDate(tanggalAktifPerawat);
-  document.getElementById('kalPerawatDetailLabel').innerText = formatTampilan(tanggalAktifPerawat);
+  document.getElementById('kalPerawatTanggalJump').value = toIsoDate(nurseTanggalAktif);
+  document.getElementById('kalPerawatDetailLabel').innerText = formatTampilan(nurseTanggalAktif);
+  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  document.getElementById('loadingKalPerawatDetail').innerText = 'Memuat jadwal...';
   document.getElementById('kalPerawatDetailContainer').innerHTML = '';
 
-  loadInputPerawat().then(function (list) {
-    var target = dateOnly(tanggalAktifPerawat).getTime();
-    var matches = list.filter(function (s) { return dateOnly(s.dateObj).getTime() === target; });
-    if (matches.length === 0) {
-      document.getElementById('kalPerawatDetailContainer').innerHTML = '<div class="empty">Tidak ada input pasien pada tanggal ini.</div>';
-      return;
-    }
-    var html = '<div class="ringkasan-jumlah">' + matches.length + ' pasien</div>';
-    matches.forEach(function (p) {
-      html += '<div class="card"><div class="nama">' + escapeHtml(p.nama) + (p.siklus ? ' — Siklus ' + escapeHtml(p.siklus) : '') + '</div>' +
-        '<div class="obat-item"><span>No. RM</span><span>' + escapeHtml(p.no_rm) + '</span></div>' +
-        '<div class="obat-item"><span>DPJP</span><span>' + escapeHtml(p.dpjp) + '</span></div>' +
-        '<div class="obat-item"><span>Diagnosa</span><span>' + escapeHtml(p.diagnosa) + '</span></div></div>';
+  loadAllNurseSchedules().then(function (list) {
+    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    var target = dateOnly(nurseTanggalAktif).getTime();
+    var matches = [];
+    list.forEach(function (s) {
+      for (var h = 0; h < s.lamaHari; h++) {
+        var tglSel = dateOnly(new Date(s.dateObjMulai.getTime() + h * 86400000));
+        if (tglSel.getTime() === target) {
+          matches.push({
+            id: s.id, nama: s.nama, noRm: s.noRm, diagnosa: s.diagnosa, dpjp: s.dpjp,
+            siklus: s.siklus, hariKe: h + 1, lamaHari: s.lamaHari,
+            dateObjMulai: s.dateObjMulai, keterangan: s.keterangan,
+            status: hitungStatus(tglSel, s.keterangan)
+          });
+        }
+      }
     });
-    document.getElementById('kalPerawatDetailContainer').innerHTML = html;
+    renderJadwalTanggalPerawat(matches);
+  }).catch(function (err) {
+    document.getElementById('loadingKalPerawatDetail').innerText = 'Gagal memuat: ' + err.message;
   });
 }
 
-// =====================================================================
-// AKUN PERAWAT — TAB B: INPUT DATA
-// =====================================================================
-function muatFormInputPerawat() {
-  var statusEl = document.getElementById('inputPerawatStatus');
-  if (statusEl) { statusEl.className = 'status-msg'; statusEl.textContent = ''; }
+function renderJadwalTanggalPerawat(matches) {
+  nursePasienListTerakhirTanggal = matches;
+
+  if (!matches || matches.length === 0) {
+    document.getElementById('kalPerawatDetailContainer').innerHTML = '<div class="empty">Tidak ada jadwal kemoterapi pada tanggal ini.</div>';
+    return;
+  }
+
+  var html = '<div class="ringkasan-jumlah">' + matches.length + ' pasien terjadwal</div>';
+  matches.forEach(function (p, i) {
+    html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
+      '<span>' + escapeHtml(p.nama) + '</span>' + renderBadge(p.status) + '</div>';
+    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">' +
+      (p.noRm ? ('No. RM ' + escapeHtml(p.noRm) + ' &middot; ') : '') +
+      (p.diagnosa ? (escapeHtml(p.diagnosa) + ' &middot; ') : '') +
+      (p.dpjp ? ('DPJP: ' + escapeHtml(p.dpjp)) : '') + '</div>';
+    html += '<div class="obat-item"><span>Siklus ' + escapeHtml(p.siklus || '-') + '</span><span class="obat-jumlah">H' + p.hariKe + ' dari ' + p.lamaHari + '</span></div>';
+
+    if (p.status === 'Tertunda') {
+      html += '<button type="button" onclick="toggleTertundaPerawat(' + i + ', false)" class="btn-neutral" style="margin-top:8px;">Batalkan Tanda Tertunda</button>';
+    } else {
+      html += '<button type="button" onclick="toggleTertundaPerawat(' + i + ', true)" class="btn-danger" style="margin-top:8px;">Tandai Tertunda</button>';
+    }
+
+    html += '<div style="display:flex; gap:6px; margin-top:6px;">';
+    html += '<button type="button" onclick="toggleUbahTanggalPerawat(' + i + ')" class="btn-accent" style="flex:1;">Ubah Jadwal</button>';
+    html += '<button type="button" onclick="hapusJadwalPerawatDariKalender(' + i + ')" style="flex:1; background:var(--danger); color:white; border:none; border-radius:16px; padding:8px 6px; font-size:12px;">Hapus Jadwal</button>';
+    html += '</div>';
+
+    html += '<div id="ubahTanggalPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
+    html += '<input type="date" id="tanggalBaruPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
+    html += '<input type="number" id="lamaHariBaruPerawat' + i + '" min="1" value="' + p.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<button type="button" onclick="simpanUbahJadwalPerawat(' + i + ')" style="width:100%; background:var(--success); color:#fff; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Simpan</button>';
+    html += '</div>';
+    html += '</div>';
+  });
+
+  document.getElementById('kalPerawatDetailContainer').innerHTML = html;
 }
 
-function submitInputPerawat() {
-  var nama = document.getElementById('perawatNamaPasien').value.trim();
-  var noRm = document.getElementById('perawatNoRm').value.trim();
-  var dpjp = document.getElementById('perawatDpjp').value.trim();
-  var diagnosa = document.getElementById('perawatDiagnosa').value.trim();
-  var siklus = document.getElementById('perawatSiklus').value.trim();
-  var interval = document.getElementById('perawatInterval').value.trim();
-  var isoTanggal = document.getElementById('perawatTanggalKemo').value;
-  var statusEl = document.getElementById('inputPerawatStatus');
+function toggleTertundaPerawat(i, jadiTertunda) {
+  var p = nursePasienListTerakhirTanggal[i];
+  if (!p) return;
+  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  document.getElementById('loadingKalPerawatDetail').innerText = jadiTertunda ? 'Menandai...' : 'Membatalkan tanda...';
+
+  var ketLama = p.keterangan || '';
+  var ketBaru;
+  if (jadiTertunda) {
+    ketBaru = ketLama.toLowerCase().indexOf('tertunda') !== -1 ? ketLama : (ketLama ? ('Tertunda; ' + ketLama) : 'Tertunda');
+  } else {
+    ketBaru = ketLama.replace(/tertunda\s*;?\s*/gi, '').replace(/;\s*$/, '').trim();
+  }
+
+  sb.from('nurse_schedules').update({ keterangan: ketBaru }).eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    muatDetailTanggalPerawat();
+  }).catch(function (err) {
+    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function toggleUbahTanggalPerawat(i) {
+  var el = document.getElementById('ubahTanggalPerawat' + i);
+  el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+function simpanUbahJadwalPerawat(i) {
+  var p = nursePasienListTerakhirTanggal[i];
+  if (!p) return;
+  var iso = document.getElementById('tanggalBaruPerawat' + i).value;
+  var lamaHariBaru = parseInt(document.getElementById('lamaHariBaruPerawat' + i).value, 10);
+  if (!iso) { alert('Pilih tanggal mulai baru terlebih dahulu.'); return; }
+  if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
+
+  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  document.getElementById('loadingKalPerawatDetail').innerText = 'Menyimpan perubahan...';
+
+  sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    muatDetailTanggalPerawat();
+  }).catch(function (err) {
+    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function hapusJadwalPerawatDariKalender(i) {
+  var p = nursePasienListTerakhirTanggal[i];
+  if (!p) return;
+  var konfirmasi = window.confirm('Yakin mau menghapus jadwal ' + p.nama + ' (Siklus ' + p.siklus + ')?\n\nSeluruh rentang hari (H1-H' + p.lamaHari + ') untuk siklus ini akan terhapus. Tindakan ini tidak bisa dibatalkan.');
+  if (!konfirmasi) return;
+
+  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  document.getElementById('loadingKalPerawatDetail').innerText = 'Menghapus...';
+
+  sb.from('nurse_schedules').delete().eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    muatDetailTanggalPerawat();
+  }).catch(function (err) {
+    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+// ---------------------------------------------------------------------
+// TAB PERAWAT 2: RIWAYAT PASIEN
+// ---------------------------------------------------------------------
+function muatDaftarPasienPerawat() {
+  document.getElementById('loadingRiwayatPerawatList').style.display = 'block';
+  sb.from('nurse_patients').select('nama').order('nama').then(function (res) {
+    document.getElementById('loadingRiwayatPerawatList').style.display = 'none';
+    if (res.error) {
+      document.getElementById('daftarPasienRiwayatPerawat').innerHTML = 'Gagal memuat: ' + escapeHtml(res.error.message);
+      return;
+    }
+    nursePatientListDimuat = true;
+    nurseAllPatientNames = res.data.map(function (row) { return row.nama; });
+    renderDaftarPasienRiwayatPerawat(document.getElementById('riwayatPerawatSearchInput').value);
+  });
+}
+
+function renderDaftarPasienRiwayatPerawat(filter) {
+  var container = document.getElementById('daftarPasienRiwayatPerawat');
+  if (!container) return;
+  var f = (filter || '').trim().toLowerCase();
+  var filtered = nurseAllPatientNames.filter(function (n) { return n.toLowerCase().indexOf(f) !== -1; });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty">Tidak ada pasien yang cocok.</div>';
+    return;
+  }
+
+  var html = '<div class="pasien-list-card">';
+  filtered.forEach(function (nama, idx) {
+    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(nama) + '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('.pasien-item').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var idx = parseInt(this.getAttribute('data-idx'), 10);
+      pilihPasienRiwayatPerawat(filtered[idx]);
+    });
+  });
+}
+
+var elRiwayatPerawatSearch = document.getElementById('riwayatPerawatSearchInput');
+if (elRiwayatPerawatSearch) {
+  elRiwayatPerawatSearch.addEventListener('input', function () {
+    renderDaftarPasienRiwayatPerawat(this.value);
+  });
+}
+
+function pilihPasienRiwayatPerawat(nama) {
+  nurseRiwayatPasienAktif = nama;
+  document.getElementById('riwayatPerawatListWrap').style.display = 'none';
+  document.getElementById('riwayatPerawatDetailWrap').style.display = 'block';
+  document.getElementById('riwayatPerawatDetailNama').textContent = nama;
+  muatRiwayatPasienDetailPerawat(nama);
+}
+
+function kembaliKeDaftarPasienPerawat() {
+  nurseRiwayatPasienAktif = null;
+  document.getElementById('riwayatPerawatDetailWrap').style.display = 'none';
+  document.getElementById('riwayatPerawatListWrap').style.display = 'block';
+}
+
+function muatRiwayatPasienDetailPerawat(nama) {
+  document.getElementById('contentRiwayatPerawat').innerHTML = '';
+  document.getElementById('ringkasanRiwayatPerawat').innerHTML = '';
+  document.getElementById('loadingRiwayatPerawat').style.display = 'block';
+  document.getElementById('loadingRiwayatPerawat').innerText = 'Memuat riwayat...';
+
+  loadAllNurseSchedules().then(function (list) {
+    document.getElementById('loadingRiwayatPerawat').style.display = 'none';
+    var mine = list.filter(function (s) { return s.nama.toLowerCase() === nama.toLowerCase(); });
+    mine.sort(function (a, b) { return a.dateObjMulai.getTime() - b.dateObjMulai.getTime(); });
+
+    nursePasienListTerakhirRiwayat = mine.map(function (s) {
+      return {
+        id: s.id, patient_id: s.patient_id, tanggalMulai: s.tanggalMulai, dateObjMulai: s.dateObjMulai,
+        siklus: s.siklus, lamaHari: s.lamaHari, keterangan: s.keterangan,
+        noRm: s.noRm, diagnosa: s.diagnosa, dpjp: s.dpjp,
+        status: hitungStatus(s.dateObjMulai, s.keterangan)
+      };
+    });
+
+    renderRiwayatPerawat(nama, nursePasienListTerakhirRiwayat);
+    siapkanFormTambahRiwayatPerawat(nama, mine);
+  }).catch(function (err) {
+    document.getElementById('loadingRiwayatPerawat').innerText = 'Gagal memuat: ' + err.message;
+  });
+}
+
+function renderRiwayatPerawat(nama, list) {
+  if (!list || list.length === 0) {
+    document.getElementById('ringkasanRiwayatPerawat').innerHTML = 'Belum ada riwayat kemo untuk ' + escapeHtml(nama) + '.';
+    document.getElementById('contentRiwayatPerawat').innerHTML = '';
+    return;
+  }
+  var info = list[list.length - 1];
+  document.getElementById('ringkasanRiwayatPerawat').innerHTML = 'Total ' + list.length + ' kali jadwal &middot; ' +
+    (info.noRm ? ('No. RM ' + escapeHtml(info.noRm) + ' &middot; ') : '') +
+    (info.diagnosa ? (escapeHtml(info.diagnosa) + ' &middot; ') : '') +
+    (info.dpjp ? ('DPJP: ' + escapeHtml(info.dpjp)) : '');
+
+  var html = '';
+  list.forEach(function (item, i) {
+    var isTerakhir = (i === list.length - 1);
+    var tglAkhirObj = new Date(item.dateObjMulai.getTime() + (item.lamaHari - 1) * 86400000);
+    var rentang = item.tanggalMulai + (item.lamaHari > 1 ? (' s/d ' + formatDDMMYYYY(tglAkhirObj)) : '') + ' (' + item.lamaHari + ' hari)';
+
+    html += '<div class="timeline-item' + (isTerakhir ? ' terakhir' : '') + '">' +
+      '<div class="timeline-tanggal" style="display:flex; justify-content:space-between; align-items:center;">' +
+      '<span>' + rentang + (isTerakhir ? ' (Terakhir)' : '') + '</span>' + renderBadge(item.status) + '</div>' +
+      '<div class="timeline-siklus">Siklus ' + escapeHtml(item.siklus) + '</div>';
+
+    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
+    html += '<button type="button" onclick="toggleUbahTanggalRiwayatPerawat(' + i + ')" class="btn-accent" style="flex:1;">Ubah Jadwal</button>';
+    html += '<button type="button" onclick="hapusJadwalRiwayatPerawat(' + i + ')" class="btn-danger" style="flex:1;">Hapus Jadwal</button>';
+    html += '</div>';
+
+    html += '<div id="ubahTanggalRiwayatPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
+    html += '<input type="date" id="tanggalBaruRiwayatPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
+    html += '<input type="number" id="lamaHariBaruRiwayatPerawat' + i + '" min="1" value="' + item.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<button type="button" onclick="simpanUbahTanggalRiwayatPerawat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan</button>';
+    html += '</div>';
+
+    html += '</div>';
+  });
+
+  document.getElementById('contentRiwayatPerawat').innerHTML = html;
+}
+
+function toggleUbahTanggalRiwayatPerawat(i) {
+  var el = document.getElementById('ubahTanggalRiwayatPerawat' + i);
+  el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+function simpanUbahTanggalRiwayatPerawat(i) {
+  var p = nursePasienListTerakhirRiwayat[i];
+  if (!p) return;
+  var iso = document.getElementById('tanggalBaruRiwayatPerawat' + i).value;
+  var lamaHariBaru = parseInt(document.getElementById('lamaHariBaruRiwayatPerawat' + i).value, 10);
+  if (!iso) { alert('Pilih tanggal mulai baru terlebih dahulu.'); return; }
+  if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
+
+  document.getElementById('loadingRiwayatPerawat').style.display = 'block';
+  document.getElementById('loadingRiwayatPerawat').innerText = 'Menyimpan perubahan...';
+
+  sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    muatRiwayatPasienDetailPerawat(nurseRiwayatPasienAktif);
+  }).catch(function (err) {
+    document.getElementById('loadingRiwayatPerawat').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function hapusJadwalRiwayatPerawat(i) {
+  var p = nursePasienListTerakhirRiwayat[i];
+  if (!p) return;
+  var konfirmasi = window.confirm('Yakin mau menghapus jadwal (Siklus ' + p.siklus + ') mulai ' + p.tanggalMulai + '?\n\nTindakan ini tidak bisa dibatalkan.');
+  if (!konfirmasi) return;
+
+  document.getElementById('loadingRiwayatPerawat').style.display = 'block';
+  document.getElementById('loadingRiwayatPerawat').innerText = 'Menghapus...';
+
+  sb.from('nurse_schedules').delete().eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    muatRiwayatPasienDetailPerawat(nurseRiwayatPasienAktif);
+  }).catch(function (err) {
+    document.getElementById('loadingRiwayatPerawat').style.display = 'none';
+    alert('Gagal: ' + err.message);
+  });
+}
+
+function siapkanFormTambahRiwayatPerawat(nama, mineSortedAsc) {
+  document.getElementById('riwayatPerawatTambahStatus').className = 'status-msg';
+  document.getElementById('riwayatPerawatTambahStatus').textContent = '';
+  document.getElementById('riwayatPerawatTambahTanggal').value = '';
+  document.getElementById('riwayatPerawatTambahLamaHari').value = '1';
+  document.getElementById('riwayatPerawatTambahSiklus').value = '';
+
+  if (mineSortedAsc && mineSortedAsc.length > 0) {
+    var last = mineSortedAsc[mineSortedAsc.length - 1];
+    var siklusNum = parseInt(last.siklus, 10);
+    document.getElementById('riwayatPerawatTambahSiklus').value = isNaN(siklusNum) ? '' : String(siklusNum + 1);
+  } else {
+    document.getElementById('riwayatPerawatTambahSiklus').value = '1';
+  }
+}
+
+function submitTambahJadwalRiwayatPerawat() {
+  var nama = nurseRiwayatPasienAktif;
+  if (!nama) return;
+
+  var isoTanggal = document.getElementById('riwayatPerawatTambahTanggal').value;
+  var siklus = document.getElementById('riwayatPerawatTambahSiklus').value.trim();
+  var lamaHari = parseInt(document.getElementById('riwayatPerawatTambahLamaHari').value, 10) || 1;
+  var statusEl = document.getElementById('riwayatPerawatTambahStatus');
   statusEl.className = 'status-msg';
   statusEl.textContent = '';
 
-  if (!nama || !isoTanggal) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Nama pasien dan tanggal kemo wajib diisi.'; return; }
+  if (!isoTanggal) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Tanggal mulai wajib diisi.'; return; }
 
-  document.getElementById('perawatSubmitBtn').disabled = true;
+  document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = true;
   statusEl.textContent = 'Menyimpan...';
 
-  sb.from('input_perawat').insert({
-    nama_pasien: nama, no_rm: noRm || null, dpjp: dpjp || null, diagnosa: diagnosa || null,
-    siklus: siklus || null, interval_hari: interval ? parseInt(interval, 10) : null, tanggal_kemo: isoTanggal
+  sb.from('nurse_patients').select('id').ilike('nama', nama).maybeSingle().then(function (res) {
+    if (!res.data) throw new Error('Data pasien tidak ditemukan.');
+    return sb.from('nurse_schedules').insert({
+      patient_id: res.data.id, tanggal_mulai: isoTanggal, siklus: siklus, lama_hari: lamaHari
+    });
   }).then(function (res) {
-    document.getElementById('perawatSubmitBtn').disabled = false;
-    if (res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
+    if (res.error) throw res.error;
+    document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = false;
     statusEl.className = 'status-msg ok';
     statusEl.textContent = 'Berhasil disimpan.';
-    inputPerawatCache = null;
-    ['perawatNamaPasien', 'perawatNoRm', 'perawatDpjp', 'perawatDiagnosa', 'perawatSiklus', 'perawatInterval', 'perawatTanggalKemo'].forEach(function (id) {
-      document.getElementById(id).value = '';
+    invalidateNurseCacheAndReload();
+    muatRiwayatPasienDetailPerawat(nama);
+  }).catch(function (err) {
+    document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Gagal: ' + err.message;
+  });
+}
+
+// ---------------------------------------------------------------------
+// TAB PERAWAT 3: DAFTARKAN PASIEN
+// ---------------------------------------------------------------------
+function muatDataUntukTambahPerawat() {
+  sb.from('nurse_patients').select('nama').order('nama').then(function (res) {
+    if (res.error) return;
+    var dl = document.getElementById('nursePatientDatalistTambah');
+    if (!dl) return;
+    dl.innerHTML = '';
+    res.data.forEach(function (row) {
+      var opt = document.createElement('option');
+      opt.value = row.nama;
+      dl.appendChild(opt);
     });
+  });
+}
+
+var elTambahPerawatNama = document.getElementById('tambahPerawatNama');
+if (elTambahPerawatNama) {
+  elTambahPerawatNama.addEventListener('change', function () {
+    var nama = this.value.trim();
+    var infoEl = document.getElementById('regimenInfoPerawat');
+    infoEl.innerHTML = '';
+    if (!nama) return;
+
+    sb.from('nurse_patients').select('id, no_rm, diagnosa, dpjp').ilike('nama', nama).maybeSingle().then(function (res) {
+      if (!res.data) {
+        infoEl.innerHTML = 'Pasien baru — isi data lengkap di bawah.';
+        return;
+      }
+      document.getElementById('tambahPerawatNoRm').value = res.data.no_rm || '';
+      document.getElementById('tambahPerawatDiagnosa').value = res.data.diagnosa || '';
+      document.getElementById('tambahPerawatDpjp').value = res.data.dpjp || '';
+      infoEl.innerHTML = 'Data pasien lama ditemukan &mdash; No. RM, Diagnosa, dan DPJP otomatis diisi. Cek kembali sebelum simpan.';
+    });
+  });
+}
+
+function submitTambahPasienPerawat() {
+  var nama = document.getElementById('tambahPerawatNama').value.trim();
+  var noRm = document.getElementById('tambahPerawatNoRm').value.trim();
+  var diagnosa = document.getElementById('tambahPerawatDiagnosa').value.trim();
+  var dpjp = document.getElementById('tambahPerawatDpjp').value.trim();
+  var isoTanggal = document.getElementById('tambahPerawatTanggal').value;
+  var siklus = document.getElementById('tambahPerawatSiklus').value.trim();
+  var lamaHari = parseInt(document.getElementById('tambahPerawatLamaHari').value, 10) || 1;
+  var statusEl = document.getElementById('tambahPerawatStatus');
+  statusEl.className = 'status-msg';
+  statusEl.textContent = '';
+
+  if (!nama || !isoTanggal) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Nama pasien dan tanggal mulai wajib diisi.';
+    return;
+  }
+
+  document.getElementById('tambahPerawatSubmitBtn').disabled = true;
+  statusEl.textContent = 'Menyimpan...';
+
+  sb.from('nurse_patients').select('id').ilike('nama', nama).maybeSingle().then(function (res) {
+    if (res.data) {
+      return sb.from('nurse_patients').update({
+        no_rm: noRm || null, diagnosa: diagnosa || null, dpjp: dpjp || null
+      }).eq('id', res.data.id).then(function () { return res.data.id; });
+    }
+    return sb.from('nurse_patients').insert({
+      nama: nama, no_rm: noRm || null, diagnosa: diagnosa || null, dpjp: dpjp || null
+    }).select('id').single().then(function (r) {
+      if (r.error) throw r.error;
+      return r.data.id;
+    });
+  }).then(function (patientId) {
+    return sb.from('nurse_schedules').insert({
+      patient_id: patientId, tanggal_mulai: isoTanggal, siklus: siklus, lama_hari: lamaHari
+    });
+  }).then(function (res) {
+    if (res.error) throw res.error;
+    document.getElementById('tambahPerawatSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg ok';
+    statusEl.textContent = 'Berhasil! Jadwal tersimpan.';
+    invalidateNurseCacheAndReload();
+    document.getElementById('tambahPerawatSiklus').value = '';
+  }).catch(function (err) {
+    document.getElementById('tambahPerawatSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Gagal: ' + err.message;
   });
 }
 
 // Muat tab pertama saat halaman dibuka (jika sudah login lewat sesi tersimpan)
 document.getElementById('kalTanggalJump').value = toIsoDate(tanggalAktif);
+var elKalPerawatJump2 = document.getElementById('kalPerawatTanggalJump');
+if (elKalPerawatJump2) elKalPerawatJump2.value = toIsoDate(nurseTanggalAktif);
