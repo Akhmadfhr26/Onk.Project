@@ -1534,7 +1534,6 @@ document.getElementById('obatSearchInput').addEventListener('change', function (
     document.getElementById('loadingCariObat').style.display = 'none';
     var daftar = [];
     var totalPemakaian = 0;
-    var hariIni = dateOnly(new Date());
     list.forEach(function (s) {
       s.items.forEach(function (it) {
         if (it.obat.toLowerCase() !== namaObat.toLowerCase()) return;
@@ -1542,7 +1541,7 @@ document.getElementById('obatSearchInput').addEventListener('change', function (
         totalPemakaian += it.jumlah;
       });
     });
-    daftar.sort(function (a, b) { return Math.abs(a.dateObj.getTime() - hariIni.getTime()) - Math.abs(b.dateObj.getTime() - hariIni.getTime()); });
+    daftar.sort(function (a, b) { return b.dateObj.getTime() - a.dateObj.getTime(); });
     renderHasilCariObat({ obat: namaObat, daftar: daftar, totalPemakaian: totalPemakaian });
   }).catch(function (err) {
     document.getElementById('loadingCariObat').style.display = 'none';
