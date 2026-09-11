@@ -14,6 +14,12 @@
 //   otomatis membuat beberapa baris nurse_schedules sekaligus,
 //   masing-masing berjarak `interval` hari — langsung muncul di
 //   kalender perawat.
+// - Tab "Cari Obat" (farmasi) diubah total: begitu tab dibuka langsung
+//   tampil daftar semua nama obat + stok saat ini (bisa di-filter
+//   dengan mengetik). Klik salah satu obat untuk melihat detail:
+//   jadwal pemakaian TERDEKAT (diurutkan dari yang paling dekat
+//   dengan hari ini, bukan sekadar "paling baru diinput") beserta
+//   total kebutuhannya, lalu riwayat pemakaian yang sudah lewat.
 // =====================================================================
 
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
@@ -37,6 +43,10 @@ var modeGrafikPasienAktif = 'bulan';
 var currentObatList = [];
 var pasienListTerakhirTertunda = [];
 var currentStokRows = [];
+
+// ---- state khusus tab Cari Obat (farmasi) ----
+var obatAllListCariObat = [];
+var obatAktifCariObat = null;
 
 // ---- state khusus tab Daftar Pasien (dulu "Riwayat") — farmasi ----
 var allPatientNames = [];
@@ -1533,50 +1543,183 @@ function renderGrafikPasien(data) {
 
 // =====================================================================
 // TAB 6: CARI OBAT (FARMASI)
+// Begitu tab dibuka: langsung tampil daftar semua nama obat + stok saat
+// ini (list, bisa langsung difilter dengan mengetik — tanpa perlu Enter).
+// Klik salah satu obat untuk melihat detail: jadwal pemakaian TERDEKAT
+// (dari hari ini ke depan, diurutkan naik supaya yang paling dekat
+// selalu tampil paling atas) beserta total kebutuhannya, lalu riwayat
+// pemakaian yang sudah lewat.
 // =====================================================================
 function muatDaftarObatUntukPencarian() {
-  isiDatalistObat('daftarObatDatalistMobile').then(function () {
+  document.getElementById('loadingCariObatList').style.display = 'block';
+  document.getElementById('daftarObatCariObat').innerHTML = '';
+
+  Promise.all([
+    muatDaftarNamaObat(),
+    sb.from('stock_entries').select('obat, jumlah')
+  ]).then(function (results) {
+    var namaList = results[0];
+    var stokRes = results[1];
+    document.getElementById('loadingCariObatList').style.display = 'none';
     obatDatalistDimuat = true;
+
+    var stokMap = {};
+    if (stokRes && !stokRes.error && stokRes.data) {
+      stokRes.data.forEach(function (row) {
+        var key = (row.obat || '').toLowerCase();
+        stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+      });
+    }
+
+    obatAllListCariObat = namaList.map(function (nama) {
+      return { obat: nama, stok: stokMap[nama.toLowerCase()] || 0 };
+    });
+
+    renderDaftarObatCariObat(document.getElementById('obatSearchInput').value);
+  }).catch(function (err) {
+    document.getElementById('loadingCariObatList').style.display = 'none';
+    document.getElementById('daftarObatCariObat').innerHTML = 'Gagal memuat: ' + escapeHtml(err.message);
   });
 }
-document.getElementById('obatSearchInput').addEventListener('change', function () {
-  var namaObat = this.value.trim();
+
+function renderDaftarObatCariObat(filter) {
+  var container = document.getElementById('daftarObatCariObat');
+  if (!container) return;
+  var f = (filter || '').trim().toLowerCase();
+  var filtered = obatAllListCariObat.filter(function (o) { return o.obat.toLowerCase().indexOf(f) !== -1; });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada obat yang cocok.</div>';
+    return;
+  }
+
+  var html = '<div class="pasien-list-card">';
+  filtered.forEach(function (o, idx) {
+    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(o.obat) + '</span>' +
+      '<span class="obat-jumlah" style="font-size:13px;">Stok ' + o.stok + '</span></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('.pasien-item').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var idx = parseInt(this.getAttribute('data-idx'), 10);
+      pilihObatCariObat(filtered[idx].obat);
+    });
+  });
+}
+
+document.getElementById('obatSearchInput').addEventListener('input', function () {
+  renderDaftarObatCariObat(this.value);
+});
+
+function pilihObatCariObat(obat) {
+  obatAktifCariObat = obat;
+  document.getElementById('cariObatListWrap').style.display = 'none';
+  document.getElementById('cariObatDetailWrap').style.display = 'block';
+  document.getElementById('cariObatDetailNama').textContent = obat;
+  muatDetailObatCariObat(obat);
+}
+
+function kembaliKeDaftarObat() {
+  obatAktifCariObat = null;
+  document.getElementById('cariObatDetailWrap').style.display = 'none';
+  document.getElementById('cariObatListWrap').style.display = 'block';
+}
+
+function muatDetailObatCariObat(obat) {
   document.getElementById('contentCariObat').innerHTML = '';
   document.getElementById('ringkasanCariObat').innerHTML = '';
-  if (!namaObat) return;
   document.getElementById('loadingCariObat').style.display = 'block';
+  document.getElementById('loadingCariObat').innerText = 'Memuat detail...';
 
-  loadAllSchedules().then(function (list) {
+  Promise.all([
+    loadAllSchedules(),
+    sb.from('stock_entries').select('jumlah').ilike('obat', obat)
+  ]).then(function (results) {
+    var list = results[0];
+    var stokRes = results[1];
     document.getElementById('loadingCariObat').style.display = 'none';
-    var daftar = [];
-    var totalPemakaian = 0;
+
+    var stokSaatIni = 0;
+    if (stokRes && !stokRes.error && stokRes.data) {
+      stokRes.data.forEach(function (row) { stokSaatIni += Number(row.jumlah || 0); });
+    }
+
+    var hariIni = dateOnly(new Date());
+    var daftarPemakaian = [];
     list.forEach(function (s) {
       s.items.forEach(function (it) {
-        if (it.obat.toLowerCase() !== namaObat.toLowerCase()) return;
-        daftar.push({ nama: s.nama, siklus: s.siklus, tanggal: s.tanggal, jumlah: it.jumlah, dateObj: s.dateObj });
-        totalPemakaian += it.jumlah;
+        if (it.obat.toLowerCase() !== obat.toLowerCase()) return;
+        daftarPemakaian.push({ nama: s.nama, siklus: s.siklus, tanggal: s.tanggal, jumlah: it.jumlah, dateObj: s.dateObj });
       });
     });
-    daftar.sort(function (a, b) { return b.dateObj.getTime() - a.dateObj.getTime(); });
-    renderHasilCariObat({ obat: namaObat, daftar: daftar, totalPemakaian: totalPemakaian });
+
+    // Pisahkan jadwal yang akan datang (>= hari ini) dari yang sudah lewat,
+    // supaya jadwal PALING DEKAT dengan hari ini selalu tampil paling atas —
+    // bukan sekadar jadwal yang paling baru diinput/terjadi.
+    var akanDatang = daftarPemakaian.filter(function (d) { return dateOnly(d.dateObj).getTime() >= hariIni.getTime(); });
+    var sudahLewat = daftarPemakaian.filter(function (d) { return dateOnly(d.dateObj).getTime() < hariIni.getTime(); });
+
+    akanDatang.sort(function (a, b) { return a.dateObj.getTime() - b.dateObj.getTime(); }); // naik: paling dekat di atas
+    sudahLewat.sort(function (a, b) { return b.dateObj.getTime() - a.dateObj.getTime(); }); // turun: riwayat terbaru di atas
+
+    var totalKebutuhanAkanDatang = akanDatang.reduce(function (sum, d) { return sum + d.jumlah; }, 0);
+
+    renderDetailObatCariObat({
+      obat: obat,
+      stok: stokSaatIni,
+      akanDatang: akanDatang,
+      sudahLewat: sudahLewat,
+      totalKebutuhanAkanDatang: totalKebutuhanAkanDatang
+    });
   }).catch(function (err) {
     document.getElementById('loadingCariObat').style.display = 'none';
     document.getElementById('ringkasanCariObat').innerText = 'Gagal memuat: ' + err.message;
   });
-});
+}
 
-function renderHasilCariObat(res) {
-  if (!res.daftar || res.daftar.length === 0) {
-    document.getElementById('ringkasanCariObat').innerHTML = 'Tidak ditemukan pemakaian untuk "' + escapeHtml(res.obat) + '".';
-    return;
+function renderDetailObatCariObat(res) {
+  var ringkasanHtml = 'Stok saat ini: <strong>' + res.stok + '</strong>';
+  if (res.akanDatang.length > 0) {
+    ringkasanHtml += ' &middot; Pemakaian terdekat: <strong>' + res.akanDatang[0].tanggal + '</strong> (butuh ' + res.akanDatang[0].jumlah + ')';
+  } else {
+    ringkasanHtml += ' &middot; Tidak ada jadwal pemakaian akan datang';
   }
-  document.getElementById('ringkasanCariObat').innerHTML = res.daftar.length + ' kali pemakaian "' + escapeHtml(res.obat) + '" (total ' + res.totalPemakaian + '), dari yang paling baru';
+  document.getElementById('ringkasanCariObat').innerHTML = ringkasanHtml;
+
   var html = '';
-  res.daftar.forEach(function (item) {
-    html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
-      '<span>' + escapeHtml(item.nama) + '</span><span style="font-size:12px; color:var(--muted); font-weight:normal;">Siklus ' + escapeHtml(item.siklus) + '</span></div>' +
-      '<div class="obat-item"><span>' + item.tanggal + '</span><span class="obat-jumlah">' + item.jumlah + '</span></div></div>';
-  });
+
+  if (res.akanDatang.length > 0) {
+    html += '<div class="total-section"><h2>Jadwal Pemakaian Akan Datang (' + res.akanDatang.length + ')</h2>';
+    html += '<div class="total-item" style="font-weight:700;"><span>Total kebutuhan (akan datang)</span><span>' + res.totalKebutuhanAkanDatang + '</span></div>';
+    html += '</div>';
+
+    html += '<div style="margin-top:12px;">';
+    res.akanDatang.forEach(function (item, i) {
+      var label = (i === 0) ? '<span style="font-size:11px; font-weight:700; color:var(--accent-dim); text-transform:uppercase; letter-spacing:0.3px;">Terdekat</span>' : '';
+      html += '<div class="card">' +
+        '<div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
+        '<span>' + escapeHtml(item.nama) + '</span>' + label + '</div>' +
+        '<div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Siklus ' + escapeHtml(item.siklus) + '</div>' +
+        '<div class="obat-item"><span>' + item.tanggal + '</span><span class="obat-jumlah">' + item.jumlah + '</span></div></div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada jadwal pemakaian akan datang untuk obat ini.</div>';
+  }
+
+  if (res.sudahLewat.length > 0) {
+    html += '<div class="total-section" style="margin-top:16px;"><h2>Riwayat Pemakaian (Sudah Lewat)</h2></div>';
+    html += '<div style="margin-top:12px;">';
+    res.sudahLewat.forEach(function (item) {
+      html += '<div class="card"><div class="nama" style="font-size:14px;">' + escapeHtml(item.nama) +
+        ' <span style="font-size:12px; color:var(--muted); font-weight:normal;">Siklus ' + escapeHtml(item.siklus) + '</span></div>' +
+        '<div class="obat-item"><span>' + item.tanggal + '</span><span class="obat-jumlah">' + item.jumlah + '</span></div></div>';
+    });
+    html += '</div>';
+  }
+
   document.getElementById('contentCariObat').innerHTML = html;
 }
 
