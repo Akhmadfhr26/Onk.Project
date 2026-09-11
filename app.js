@@ -87,7 +87,7 @@ function hitungStatus(tanggalDate, keterangan) {
 function renderBadge(status) {
   var warna = { 'Tertunda': '#E23B57', 'Sudah Kemo': '#1E9C6B', 'Hari Ini': '#0E9488', 'Belum Kemo': '#7C8CA0' };
   var w = warna[status] || '#7C8CA0';
-  return '<span style="border:1px solid ' + w + '; background:' + w + '1F; color:' + w +
+  return '<span class="status-badge" style="border:1px solid ' + w + '; background:' + w + '1F; color:' + w +
     '; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; font-family:var(--font-mono); white-space:nowrap;">' +
     '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:' + w + '; margin-right:5px;"></span>' +
     status + '</span>';
