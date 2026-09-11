@@ -248,11 +248,19 @@ function invalidateCacheAndReload() {
 // =====================================================================
 function muatDaftarNamaObat(forceReload) {
   if (daftarNamaObatSharedCache && !forceReload) return Promise.resolve(daftarNamaObatSharedCache);
-  return loadAllSchedules().then(function (list) {
+  return Promise.all([
+    loadAllSchedules(),
+    sb.from('stock_entries').select('obat')
+  ]).then(function (results) {
+    var list = results[0];
+    var stokRes = results[1];
     var namaObatSet = {};
     list.forEach(function (s) {
       s.items.forEach(function (it) { if (it.obat) namaObatSet[it.obat] = true; });
     });
+    if (stokRes && !stokRes.error && stokRes.data) {
+      stokRes.data.forEach(function (row) { if (row.obat) namaObatSet[row.obat] = true; });
+    }
     var sorted = Object.keys(namaObatSet).sort();
     daftarNamaObatSharedCache = sorted;
     return sorted;
@@ -673,12 +681,20 @@ function muatKebutuhanRentang() {
     });
 
     var stokMap = {};
+    var stokNamaAsli = {};
     if (stokRes && !stokRes.error && stokRes.data) {
       stokRes.data.forEach(function (row) {
         var key = (row.obat || '').toLowerCase();
         stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+        if (!stokNamaAsli[key]) stokNamaAsli[key] = row.obat;
       });
     }
+
+    // Obat yang sudah ada catatan stoknya tapi belum dipakai di jadwal rentang ini
+    // tetap dimasukkan, supaya stok yang baru diinput tidak "hilang" dari daftar.
+    Object.keys(stokMap).forEach(function (k) {
+      if (!groups[k]) groups[k] = { obat: stokNamaAsli[k], totalJumlah: 0, pasienSet: {} };
+    });
 
     var items = Object.keys(groups).map(function (k) {
       var g = groups[k];
