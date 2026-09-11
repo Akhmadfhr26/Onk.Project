@@ -509,7 +509,7 @@ function renderJadwalTanggal(detail) {
   tanggalTerakhirUntukTertunda = detail.tanggal;
 
   if (!detail.pasienList || detail.pasienList.length === 0) {
-    document.getElementById('kalDetailContainer').innerHTML = '<div class="empty">Tidak ada jadwal kemoterapi pada tanggal ini.</div>';
+    document.getElementById('kalDetailContainer').innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada jadwal kemoterapi pada tanggal ini.</div>';
     return;
   }
 
@@ -844,7 +844,7 @@ function renderDaftarPasienRiwayat(filter) {
   var filtered = allPatientNames.filter(function (n) { return n.toLowerCase().indexOf(f) !== -1; });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty">Tidak ada pasien yang cocok.</div>';
+    container.innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada pasien yang cocok.</div>';
     return;
   }
 
@@ -1145,7 +1145,7 @@ function renderTertunda(detail) {
   pasienListTerakhirTertunda = detail.pasienList;
 
   if (!detail.pasienList || detail.pasienList.length === 0) {
-    document.getElementById('ringkasanTertunda').innerHTML = 'Tidak ada pasien yang berstatus Tertunda saat ini. 👍';
+    document.getElementById('ringkasanTertunda').innerHTML = 'Tidak ada pasien yang berstatus Tertunda saat ini. <i class="ti ti-circle-check" aria-hidden="true" style="color:var(--success); vertical-align:-2px;"></i>';
     return;
   }
   document.getElementById('ringkasanTertunda').innerHTML = detail.pasienList.length + ' pasien berstatus Tertunda';
@@ -1413,7 +1413,7 @@ function renderDashboard(r) {
   // ===== Stok Obat Kritis (7 Hari ke Depan) =====
   if (r.stokKritis.length > 0) {
     html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--danger);">';
-    html += '<div class="nama" style="font-size:14px;">⚠️ Stok Obat Kritis (' + r.stokKritis.length + ')</div>';
+    html += '<div class="nama" style="font-size:14px;"><i class="ti ti-alert-triangle" aria-hidden="true" style="color:var(--danger); vertical-align:-2px;"></i> Stok Obat Kritis (' + r.stokKritis.length + ')</div>';
     html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Stok saat ini tidak cukup untuk kebutuhan 7 hari ke depan &mdash; segera pesan.</div>';
     r.stokKritis.forEach(function (item) {
       html += '<div class="total-item" style="align-items:center;">' +
@@ -1424,7 +1424,7 @@ function renderDashboard(r) {
     html += '</div>';
   } else {
     html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--success);">';
-    html += '<div class="nama" style="font-size:14px;">✅ Stok Obat Aman</div>';
+    html += '<div class="nama" style="font-size:14px;"><i class="ti ti-circle-check" aria-hidden="true" style="color:var(--success); vertical-align:-2px;"></i> Stok Obat Aman</div>';
     html += '<div style="font-size:12px; color:var(--muted);">Stok saat ini mencukupi kebutuhan 7 hari ke depan.</div>';
     html += '</div>';
   }
@@ -1439,7 +1439,7 @@ function renderDashboard(r) {
 
   if (r.pasienBerpotensiHilang.length > 0) {
     html += '<div class="card" style="margin-top:14px; border-left:4px solid var(--danger);">';
-    html += '<div class="nama" style="font-size:14px;">⚠️ Berpotensi Belum Follow-up (' + r.pasienBerpotensiHilang.length + ')</div>';
+    html += '<div class="nama" style="font-size:14px;"><i class="ti ti-alert-triangle" aria-hidden="true" style="color:var(--danger); vertical-align:-2px;"></i> Berpotensi Belum Follow-up (' + r.pasienBerpotensiHilang.length + ')</div>';
     html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Perkiraan jadwal berikutnya sudah lewat &gt;7 hari, belum ada jadwal baru</div>';
     r.pasienBerpotensiHilang.forEach(function (p) {
       html += '<div class="obat-item"><span>' + escapeHtml(p.nama) + '</span><span style="color:var(--danger); font-weight:600;">' + p.terlambatHari + ' hari</span></div>';
@@ -1903,7 +1903,7 @@ function renderJadwalTanggalPerawat(matches) {
   nursePasienListTerakhirTanggal = matches;
 
   if (!matches || matches.length === 0) {
-    document.getElementById('kalPerawatDetailContainer').innerHTML = '<div class="empty">Tidak ada jadwal kemoterapi pada tanggal ini.</div>';
+    document.getElementById('kalPerawatDetailContainer').innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada jadwal kemoterapi pada tanggal ini.</div>';
     return;
   }
 
@@ -2083,7 +2083,7 @@ function renderDaftarPasienRiwayatPerawat(filter) {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty">Tidak ada pasien yang cocok.</div>';
+    container.innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada pasien yang cocok.</div>';
     return;
   }
 
