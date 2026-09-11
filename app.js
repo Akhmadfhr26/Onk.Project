@@ -416,14 +416,16 @@ function muatKalender() {
     list.forEach(function (s) {
       if (s.dateObj.getFullYear() !== tahun || (s.dateObj.getMonth() + 1) !== bulan) return;
       var hari = s.dateObj.getDate();
-      if (!hariData[hari]) hariData[hari] = { entriSet: {}, adaTertunda: false };
+      if (!hariData[hari]) hariData[hari] = { entriMap: {} };
       var teks = (s.siklus && s.siklus !== '-') ? (s.nama + ' ' + s.siklus) : s.nama;
-      hariData[hari].entriSet[teks] = true;
-      if (s.keterangan.toLowerCase().indexOf('tertunda') !== -1) hariData[hari].adaTertunda = true;
+      var isTertunda = s.keterangan.toLowerCase().indexOf('tertunda') !== -1;
+      // kalau nama+siklus yang sama muncul lebih dari sekali, tandai tertunda kalau salah satunya tertunda
+      hariData[hari].entriMap[teks] = (hariData[hari].entriMap[teks] || false) || isTertunda;
     });
     var hasil = {};
     Object.keys(hariData).forEach(function (h) {
-      hasil[h] = { daftarPasien: Object.keys(hariData[h].entriSet).sort(), adaTertunda: hariData[h].adaTertunda };
+      var teksList = Object.keys(hariData[h].entriMap).sort();
+      hasil[h] = { daftarPasien: teksList.map(function (teks) { return { teks: teks, tertunda: hariData[h].entriMap[teks] }; }) };
     });
     kalHariDataTerakhir = hasil;
     renderKalenderGrid(tahun, bulan, hasil);
@@ -447,12 +449,13 @@ function renderKalenderGrid(tahun, bulan, hariData) {
     var info = hariData[tgl];
     var kelas = 'kal-cell';
     if (info) kelas += ' ada-jadwal';
-    if (info && info.adaTertunda) kelas += ' ada-tertunda';
     if (isBulanIni && hariIni.getDate() === tgl) kelas += ' hari-ini';
     if (isBulanTerpilih && tanggalAktif.getDate() === tgl) kelas += ' terpilih';
 
     html += '<div class="' + kelas + '" onclick="pilihTanggalKalender(' + tgl + ')"><div class="kal-tgl-num">' + tgl + '</div>';
-    if (info) info.daftarPasien.forEach(function (entri) { html += '<div class="kal-entri">' + escapeHtml(entri) + '</div>'; });
+    if (info) info.daftarPasien.forEach(function (entri) {
+      html += '<div class="kal-entri">' + escapeHtml(entri.teks) + (entri.tertunda ? '<span class="kal-entri-titik-tertunda"></span>' : '') + '</div>';
+    });
     html += '</div>';
   }
   document.getElementById('kalGrid').innerHTML = html;
@@ -1702,15 +1705,16 @@ function muatKalenderPerawat() {
         var tglSel = new Date(s.dateObjMulai.getTime() + h * 86400000);
         if (tglSel.getFullYear() !== tahun || (tglSel.getMonth() + 1) !== bulan) continue;
         var hari = tglSel.getDate();
-        if (!hariData[hari]) hariData[hari] = { entriSet: {}, adaTertunda: false };
+        if (!hariData[hari]) hariData[hari] = { entriMap: {} };
         var teks = s.nama + (s.siklus ? (' — Siklus ' + s.siklus) : '') + ' (H' + (h + 1) + ')';
-        hariData[hari].entriSet[teks] = true;
-        if (s.keterangan.toLowerCase().indexOf('tertunda') !== -1) hariData[hari].adaTertunda = true;
+        var isTertunda = s.keterangan.toLowerCase().indexOf('tertunda') !== -1;
+        hariData[hari].entriMap[teks] = (hariData[hari].entriMap[teks] || false) || isTertunda;
       }
     });
     var hasil = {};
     Object.keys(hariData).forEach(function (h) {
-      hasil[h] = { daftarPasien: Object.keys(hariData[h].entriSet).sort(), adaTertunda: hariData[h].adaTertunda };
+      var teksList = Object.keys(hariData[h].entriMap).sort();
+      hasil[h] = { daftarPasien: teksList.map(function (teks) { return { teks: teks, tertunda: hariData[h].entriMap[teks] }; }) };
     });
     nurseKalHariDataTerakhir = hasil;
     renderKalenderPerawatGrid(tahun, bulan, hasil);
@@ -1734,12 +1738,13 @@ function renderKalenderPerawatGrid(tahun, bulan, hariData) {
     var info = hariData[tgl];
     var kelas = 'kal-cell';
     if (info) kelas += ' ada-jadwal';
-    if (info && info.adaTertunda) kelas += ' ada-tertunda';
     if (isBulanIni && hariIni.getDate() === tgl) kelas += ' hari-ini';
     if (isBulanTerpilih && nurseTanggalAktif.getDate() === tgl) kelas += ' terpilih';
 
     html += '<div class="' + kelas + '" onclick="pilihTanggalKalenderPerawat(' + tgl + ')"><div class="kal-tgl-num">' + tgl + '</div>';
-    if (info) info.daftarPasien.forEach(function (entri) { html += '<div class="kal-entri">' + escapeHtml(entri) + '</div>'; });
+    if (info) info.daftarPasien.forEach(function (entri) {
+      html += '<div class="kal-entri">' + escapeHtml(entri.teks) + (entri.tertunda ? '<span class="kal-entri-titik-tertunda"></span>' : '') + '</div>';
+    });
     html += '</div>';
   }
   document.getElementById('kalPerawatGrid').innerHTML = html;
