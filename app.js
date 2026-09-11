@@ -1767,7 +1767,7 @@ function muatDetailTanggalPerawat() {
         var tglSel = dateOnly(new Date(s.dateObjMulai.getTime() + h * 86400000));
         if (tglSel.getTime() === target) {
           matches.push({
-            id: s.id, nama: s.nama, noRm: s.noRm, diagnosa: s.diagnosa, dpjp: s.dpjp,
+            id: s.id, patient_id: s.patient_id, nama: s.nama, noRm: s.noRm, diagnosa: s.diagnosa, dpjp: s.dpjp,
             siklus: s.siklus, hariKe: h + 1, lamaHari: s.lamaHari,
             dateObjMulai: s.dateObjMulai, keterangan: s.keterangan,
             status: hitungStatus(tglSel, s.keterangan)
@@ -1815,6 +1815,9 @@ function renderJadwalTanggalPerawat(matches) {
     html += '<input type="date" id="tanggalBaruPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
     html += '<input type="number" id="lamaHariBaruPerawat' + i + '" min="1" value="' + p.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
+    html += '<input type="checkbox" id="geserBerikutnyaPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
+    html += '</label>';
     html += '<button type="button" onclick="simpanUbahJadwalPerawat(' + i + ')" style="width:100%; background:var(--success); color:#fff; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Simpan</button>';
     html += '</div>';
     html += '</div>';
@@ -1859,12 +1862,32 @@ function simpanUbahJadwalPerawat(i) {
   var lamaHariBaru = parseInt(document.getElementById('lamaHariBaruPerawat' + i).value, 10);
   if (!iso) { alert('Pilih tanggal mulai baru terlebih dahulu.'); return; }
   if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
+  var geser = document.getElementById('geserBerikutnyaPerawat' + i).checked;
 
   document.getElementById('loadingKalPerawatDetail').style.display = 'block';
   document.getElementById('loadingKalPerawatDetail').innerText = 'Menyimpan perubahan...';
 
-  sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id).then(function (res) {
-    if (res.error) throw res.error;
+  var tanggalLamaObj = dateOnly(p.dateObjMulai);
+  var parts = iso.split('-');
+  var tanggalBaruObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  var deltaDays = Math.round((tanggalBaruObj.getTime() - tanggalLamaObj.getTime()) / 86400000);
+
+  loadAllNurseSchedules().then(function (list) {
+    var updates = [sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id)];
+    if (geser && deltaDays !== 0) {
+      list.forEach(function (s) {
+        if (s.id === p.id) return;
+        if (s.patient_id !== p.patient_id) return;
+        if (dateOnly(s.dateObjMulai).getTime() > tanggalLamaObj.getTime()) {
+          var geseredDate = new Date(s.dateObjMulai.getTime() + deltaDays * 86400000);
+          updates.push(sb.from('nurse_schedules').update({ tanggal_mulai: toIsoDate(geseredDate) }).eq('id', s.id));
+        }
+      });
+    }
+    return Promise.all(updates);
+  }).then(function (results) {
+    var failed = results.find(function (r) { return r.error; });
+    if (failed) throw failed.error;
     invalidateNurseCacheAndReload();
     muatDetailTanggalPerawat();
   }).catch(function (err) {
@@ -2051,6 +2074,9 @@ function renderRiwayatPerawat(nama, list) {
     html += '<input type="date" id="tanggalBaruRiwayatPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
     html += '<input type="number" id="lamaHariBaruRiwayatPerawat' + i + '" min="1" value="' + item.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
+    html += '<input type="checkbox" id="geserBerikutnyaRiwayatPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
+    html += '</label>';
     html += '<button type="button" onclick="simpanUbahTanggalRiwayatPerawat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan</button>';
     html += '</div>';
 
@@ -2072,12 +2098,32 @@ function simpanUbahTanggalRiwayatPerawat(i) {
   var lamaHariBaru = parseInt(document.getElementById('lamaHariBaruRiwayatPerawat' + i).value, 10);
   if (!iso) { alert('Pilih tanggal mulai baru terlebih dahulu.'); return; }
   if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
+  var geser = document.getElementById('geserBerikutnyaRiwayatPerawat' + i).checked;
 
   document.getElementById('loadingRiwayatPerawat').style.display = 'block';
   document.getElementById('loadingRiwayatPerawat').innerText = 'Menyimpan perubahan...';
 
-  sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id).then(function (res) {
-    if (res.error) throw res.error;
+  var tanggalLamaObj = dateOnly(p.dateObjMulai);
+  var parts = iso.split('-');
+  var tanggalBaruObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  var deltaDays = Math.round((tanggalBaruObj.getTime() - tanggalLamaObj.getTime()) / 86400000);
+
+  loadAllNurseSchedules().then(function (list) {
+    var updates = [sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id)];
+    if (geser && deltaDays !== 0) {
+      list.forEach(function (s) {
+        if (s.id === p.id) return;
+        if (s.patient_id !== p.patient_id) return;
+        if (dateOnly(s.dateObjMulai).getTime() > tanggalLamaObj.getTime()) {
+          var geseredDate = new Date(s.dateObjMulai.getTime() + deltaDays * 86400000);
+          updates.push(sb.from('nurse_schedules').update({ tanggal_mulai: toIsoDate(geseredDate) }).eq('id', s.id));
+        }
+      });
+    }
+    return Promise.all(updates);
+  }).then(function (results) {
+    var failed = results.find(function (r) { return r.error; });
+    if (failed) throw failed.error;
     invalidateNurseCacheAndReload();
     muatRiwayatPasienDetailPerawat(nurseRiwayatPasienAktif);
   }).catch(function (err) {
