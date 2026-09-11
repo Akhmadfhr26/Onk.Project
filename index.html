@@ -1,626 +1,433 @@
 <!DOCTYPE html>
-<html lang="id" class="light">
+<html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Jadwal Kemoterapi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.46.0/dist/tabler-icons.min.css">
 <style>
-  /* ============================================================
-     TEMA — sama seperti file dashboard (jaga variabel ini agar konsisten)
-     ============================================================ */
+  /* =========================================================
+     THEME TOKENS
+     Light mode: off-white background, teal (farmasi) + indigo (perawat)
+     Dark mode: activated via [data-theme="dark"] on <html>
+     ========================================================= */
   :root {
-    --bg:            #F7F9FC;
-    --surface:       #FFFFFF;
-    --surface-2:     #F4F7FB;
-    --surface-3:     #E8EEF5;
-    --border:        rgba(15,35,55,0.06);
-    --border-2:      rgba(15,35,55,0.10);
-    --border-strong: rgba(15,35,55,0.16);
-
-    --text:   #0F1E2E;
-    --text-2: #2B3E52;
-    --label:  #4A5F76;
-    --muted:  #7A8DA3;
-
-    --teal-50:  #EFFCF9;
-    --teal-100: #CCF5EC;
-    --teal-500: #0E9488;
-    --teal-600: #0B776D;
-    --teal-700: #0A5F57;
-
-    --indigo-50:  #EEF2FF;
-    --indigo-100: #E0E7FF;
-    --indigo-500: #5B5FE0;
-    --indigo-600: #4F46E5;
-    --indigo-700: #4338CA;
-
-    --success:    #0E9F6E;
-    --success-bg: #E6F7F0;
-    --warning:    #D97706;
-    --warning-bg: #FEF3C7;
-    --danger:     #DC2626;
-    --danger-bg:  #FEE2E2;
-    --info:       #2563EB;
-    --info-bg:    #DBEAFE;
-
-    --accent:          var(--teal-600);
-    --accent-dim:      var(--teal-700);
-    --accent-soft:     var(--teal-50);
+    --bg: #F6F5F1;
+    --bg-gradient: radial-gradient(1200px 600px at 10% -10%, rgba(14,148,136,0.07), transparent 60%),
+                   radial-gradient(1000px 500px at 100% 0%, rgba(79,70,229,0.06), transparent 55%);
+    --surface: #FFFFFF;
+    --surface-2: #F1F0EB;
+    --surface-raised: #FFFFFF;
+    --border: rgba(20,25,20,0.08);
+    --border-strong: rgba(20,25,20,0.16);
+    --text: #1B1F1D;
+    --label: #454E4A;
+    --muted: #6B746F;
+    --accent: #0E9488;
+    --accent-dim: #0B776D;
+    --accent-soft: rgba(14,148,136,0.12);
     --accent-contrast: #FFFFFF;
-
-    --radius:    16px;
-    --radius-sm: 10px;
-    --radius-lg: 20px;
-    --radius-btn: 99px;
-    --radius-btn-sm: 99px;
-
-    --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono:    'JetBrains Mono', ui-monospace, Consolas, monospace;
-
-    --shadow-xs: 0 1px 2px rgba(15,35,55,0.04);
-    --shadow-sm: 0 1px 2px rgba(15,35,55,0.04), 0 2px 6px rgba(15,35,55,0.04);
-    --shadow-md: 0 1px 2px rgba(15,35,55,0.04), 0 4px 12px rgba(15,35,55,0.06), 0 12px 24px -8px rgba(15,35,55,0.08);
-    --shadow-lg: 0 2px 4px rgba(15,35,55,0.04), 0 12px 32px rgba(15,35,55,0.10), 0 24px 48px -12px rgba(15,35,55,0.12);
-    --shadow-teal: 0 4px 14px rgba(14,148,136,0.20), 0 12px 32px -8px rgba(14,148,136,0.30);
-
-    --neutral: #64748B;
-    --success-soft: var(--success-bg);
-    --danger-soft: var(--danger-bg);
+    --accent-2: #4F46E5;
+    --accent-2-dim: #4338CA;
+    --accent-2-soft: rgba(79,70,229,0.12);
+    --success: #1E9C6B;
+    --success-soft: rgba(30,156,107,0.12);
+    --danger: #E23B57;
     --danger-dim: #C22C46;
-    --sidebar-w: 260px;
+    --danger-soft: rgba(226,59,87,0.12);
+    --neutral: #64748B;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --radius-btn: 18px;
+    --radius-btn-sm: 14px;
+    --sidebar-w: 252px;
     --content-max: 1080px;
+    --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Roboto Mono', 'Droid Sans Mono', Consolas, Menlo, monospace;
+
+    /* layered shadows */
+    --shadow-1: 0 1px 2px rgba(20,25,20,0.05);
+    --shadow-2: 0 1px 2px rgba(20,25,20,0.04), 0 6px 16px rgba(20,25,20,0.06);
+    --shadow-3: 0 2px 4px rgba(20,25,20,0.04), 0 10px 24px rgba(20,25,20,0.08), 0 24px 48px rgba(20,25,20,0.05);
+    --shadow-accent: 0 8px 20px rgba(14,148,136,0.28);
+    --shadow-accent-2: 0 8px 20px rgba(79,70,229,0.28);
   }
 
-  /* ============================================================
-     DARK MODE — override variabel saja
-     ============================================================ */
-  html.dark {
-    --bg:            #0B1220;
-    --surface:       #131C2B;
-    --surface-2:     #1B2738;
-    --surface-3:     #243449;
-    --border:        rgba(255,255,255,0.06);
-    --border-2:      rgba(255,255,255,0.10);
+  html[data-theme="dark"] {
+    --bg: #12151A;
+    --bg-gradient: radial-gradient(1200px 600px at 10% -10%, rgba(14,148,136,0.10), transparent 60%),
+                   radial-gradient(1000px 500px at 100% 0%, rgba(79,70,229,0.10), transparent 55%);
+    --surface: #1A1F26;
+    --surface-2: #20262E;
+    --surface-raised: #1E242C;
+    --border: rgba(255,255,255,0.08);
     --border-strong: rgba(255,255,255,0.16);
+    --text: #EDEFF2;
+    --label: #C4CBD3;
+    --muted: #8B95A1;
+    --accent: #14B8A6;
+    --accent-dim: #0E9488;
+    --accent-soft: rgba(20,184,166,0.16);
+    --accent-contrast: #06201D;
+    --accent-2: #818CF8;
+    --accent-2-dim: #6366F1;
+    --accent-2-soft: rgba(129,140,248,0.16);
+    --success: #34D399;
+    --success-soft: rgba(52,211,153,0.16);
+    --danger: #FB7185;
+    --danger-dim: #F43F5E;
+    --danger-soft: rgba(251,113,133,0.16);
+    --neutral: #94A3B8;
 
-    --text:   #E6EDF3;
-    --text-2: #B6C4D2;
-    --label:  #B6C4D2;
-    --muted:  #7A8B9E;
-
-    --teal-50:  rgba(20,184,166,0.14);
-    --teal-100: rgba(20,184,166,0.20);
-    --teal-500: #14B8A6;
-    --teal-600: #2DD4BF;
-    --teal-700: #5EEAD4;
-
-    --indigo-50:  rgba(99,102,241,0.14);
-    --indigo-100: rgba(99,102,241,0.20);
-    --indigo-500: #6366F1;
-    --indigo-600: #818CF8;
-    --indigo-700: #A5B4FC;
-
-    --success:    #34D399;
-    --success-bg: rgba(52,211,153,0.14);
-    --warning:    #FBBF24;
-    --warning-bg: rgba(251,191,36,0.14);
-    --danger:     #F87171;
-    --danger-bg:  rgba(248,113,113,0.14);
-    --info:       #60A5FA;
-    --info-bg:    rgba(96,165,250,0.14);
-
-    --accent:          var(--teal-600);
-    --accent-dim:      var(--teal-500);
-    --accent-soft:     rgba(20,184,166,0.12);
-    --accent-contrast: #0B1220;
-
-    --shadow-xs: 0 1px 2px rgba(0,0,0,0.4);
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
-    --shadow-md: 0 2px 4px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.4);
-    --shadow-lg: 0 4px 8px rgba(0,0,0,0.4), 0 20px 48px rgba(0,0,0,0.5);
-    --shadow-teal: 0 4px 14px rgba(20,184,166,0.30), 0 12px 32px -8px rgba(20,184,166,0.40);
+    --shadow-1: 0 1px 2px rgba(0,0,0,0.30);
+    --shadow-2: 0 1px 2px rgba(0,0,0,0.30), 0 8px 18px rgba(0,0,0,0.34);
+    --shadow-3: 0 2px 4px rgba(0,0,0,0.32), 0 12px 26px rgba(0,0,0,0.38), 0 28px 52px rgba(0,0,0,0.30);
+    --shadow-accent: 0 10px 24px rgba(20,184,166,0.30);
+    --shadow-accent-2: 0 10px 24px rgba(129,140,248,0.30);
   }
 
-  /* ============================================================
-     BASE
-     ============================================================ */
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; }
+  html { background: var(--bg); }
   body {
     font-family: var(--font-display);
-    background: var(--bg);
-    color: var(--text);
-    -webkit-font-smoothing: antialiased;
-    transition: background 0.3s, color 0.3s;
-    min-height: 100vh;
-  }
-  body::before {
-    content: '';
-    position: fixed; inset: 0;
-    background:
-      radial-gradient(800px circle at 0% 0%, rgba(14,148,136,0.06), transparent 50%),
-      radial-gradient(600px circle at 100% 100%, rgba(99,102,241,0.05), transparent 50%);
-    pointer-events: none;
-    z-index: 0;
-    transition: opacity 0.3s;
-  }
-  html.dark body::before {
-    background:
-      radial-gradient(800px circle at 0% 0%, rgba(20,184,166,0.10), transparent 50%),
-      radial-gradient(600px circle at 100% 100%, rgba(99,102,241,0.08), transparent 50%);
+    margin: 0; padding: 0;
+    background: var(--bg-gradient), var(--bg);
+    background-attachment: fixed;
+    color: var(--text); -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
   .mono { font-family: var(--font-mono); }
 
-  /* ============================================================
-     HEADER (dipakai di layar login)
-     ============================================================ */
-  .header { text-align: center; margin-bottom: 18px; position: relative; z-index: 1; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .header { text-align: center; margin-bottom: 18px; position: relative; }
   .header h1 {
-    font-size: 20px; margin: 0; font-weight: 800; letter-spacing: -0.3px;
-    display: inline-flex; align-items: center; gap: 10px;
-  }
-  .header h1 .brand-mark {
-    width: 36px; height: 36px; border-radius: 11px;
-    background: linear-gradient(135deg, var(--teal-500), var(--teal-700));
-    color: #fff; display: inline-flex; align-items: center; justify-content: center;
-    font-size: 18px; flex-shrink: 0;
-    box-shadow: var(--shadow-teal);
-  }
-  .header h1 .brand-text {
-    background: linear-gradient(135deg, var(--teal-700), var(--teal-500));
+    font-size: 19px; margin: 0; font-weight: 700; letter-spacing: 0.2px;
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent) 55%, #35C7B8);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .header-user { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 10px; font-weight: 500; }
-  .header-user button {
-    background: none; border: none; color: var(--danger); font-size: 11px; font-weight: 700;
-    padding: 6px 8px; border-radius: 8px; cursor: pointer; transition: background 0.15s;
-  }
-  .header-user button:hover { background: var(--danger-bg); }
+  .header h1 i { -webkit-text-fill-color: var(--accent); color: var(--accent); font-size: 20px; }
+  .header-pulse { display: block; margin: 6px auto 0; opacity: 0.85; }
+  .header-user { font-size:12px; color:var(--muted); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .header-user button { background:none; border:none; color:var(--danger); font-size:12px; font-weight:600; padding:2px; cursor:pointer; transition: color 0.15s ease, opacity 0.15s ease; }
+  .header-user button:hover { opacity: 0.75; }
+  .divider-gradient { height: 1px; border: none; margin: 14px 0; background: linear-gradient(90deg, transparent, var(--border-strong) 25%, var(--border-strong) 75%, transparent); }
 
-  /* ============================================================
-     APP SHELL — sidebar + konten
-     ============================================================ */
-  .app-shell { display: flex; min-height: 100vh; align-items: stretch; position: relative; z-index: 1; }
+  /* ===== Web shell: classic sidebar + content ===== */
+  .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
 
   .sidebar {
     width: var(--sidebar-w); flex-shrink: 0;
-    background: var(--surface); border-right: 1px solid var(--border-2);
+    background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column;
-    padding: 24px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 22px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
     scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
-    transition: background 0.3s, border-color 0.3s;
+    box-shadow: var(--shadow-1);
+    transition: background-color 0.25s ease, border-color 0.25s ease;
   }
   .sidebar::-webkit-scrollbar { width: 6px; }
   .sidebar::-webkit-scrollbar-track { background: transparent; }
   .sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
-
-  .sidebar .header { text-align: left; margin-bottom: 24px; padding: 0 8px; }
+  .sidebar::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  .sidebar .header { text-align: left; margin-bottom: 22px; }
   .sidebar .header h1 { font-size: 17px; }
+  .sidebar .header-pulse { margin-left: 0; }
 
-  .sidebar-section-label {
-    font-size: 10.5px; font-weight: 800; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.8px;
-    padding: 14px 12px 6px;
-  }
-  .sidebar-section-label:first-of-type { padding-top: 0; }
-  #sidebarLabelFarmasi { color: var(--teal-600); }
-  #sidebarLabelPerawat { color: var(--indigo-600); }
-
-  .tabs { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .tabs { display: flex; flex-direction: column; gap: 4px; flex: 1; margin-bottom: 0; }
   .tab-btn {
-    min-width: 0; width: 100%;
-    display: flex; align-items: center; gap: 11px;
-    text-align: left; padding: 10px 12px; border: 1px solid transparent;
-    border-radius: var(--radius-sm); background: transparent; color: var(--label);
+    min-width: 0; width: 100%; flex: none;
+    display: flex; align-items: center; gap: 10px;
+    text-align: left; padding: 11px 12px; border: 1px solid transparent;
+    border-radius: var(--radius-sm); background: transparent; color: var(--muted);
     font-size: 13.5px; font-weight: 600; font-family: var(--font-display);
-    transition: all 0.18s ease; position: relative; cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    cursor: pointer;
   }
-  .tab-btn i { font-size: 17px; width: 17px; text-align: center; flex-shrink: 0; }
-  .tab-btn:hover { background: var(--surface-2); color: var(--text-2); transform: translateX(2px); }
+  .tab-btn:hover { background: var(--surface-2); color: var(--label); transform: translateX(1px); }
+  .tab-btn i { font-size: 16px; flex-shrink: 0; width: 16px; text-align: center; }
   .tab-btn.active {
-    background: var(--accent-soft); color: var(--accent-dim); font-weight: 700;
-    box-shadow: inset 0 0 0 1px var(--border-strong);
+    background: var(--accent-soft); color: var(--accent-dim); border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset;
+    border-left: 3px solid var(--accent); padding-left: 9px;
   }
-  .tab-btn.active::before {
-    content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
-    background: var(--accent); border-radius: 0 3px 3px 0;
+  /* Perawat tabs get an indigo active state instead of teal */
+  #tabBtnKalenderPerawat.active,
+  #tabBtnRiwayatPerawat.active,
+  #tabBtnTambahPerawat.active {
+    background: var(--accent-2-soft); color: var(--accent-2-dim);
+    box-shadow: 0 0 0 1px var(--accent-2) inset; border-left-color: var(--accent-2);
+  }
+  .sidebar-section-label {
+    font-size: 11px; color: var(--muted); font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; padding: 10px 12px 4px; position: relative;
+  }
+  .sidebar-section-label:first-child { padding-top: 0; }
+  .sidebar-section-label:not(:first-child)::before {
+    content: ''; display: block; height: 1px; margin: 4px 0 10px;
+    background: linear-gradient(90deg, transparent, var(--border-strong) 20%, var(--border-strong) 80%, transparent);
   }
 
   .sidebar-footer {
-    margin-top: auto; padding-top: 16px;
-    border-top: 1px solid var(--border);
-    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; padding-top: 14px;
+    border-top: none; position: relative;
   }
-  .sidebar-avatar {
-    width: 36px; height: 36px; border-radius: 11px;
-    background: linear-gradient(135deg, var(--teal-500), var(--teal-700));
-    color: #fff; display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 13px; flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(14,148,136,0.25);
-    transition: all 0.3s;
+  .sidebar-footer::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border-strong) 20%, var(--border-strong) 80%, transparent);
   }
-  .sidebar-avatar.perawat {
-    background: linear-gradient(135deg, var(--indigo-500), var(--indigo-700));
-    box-shadow: 0 4px 12px rgba(99,102,241,0.25);
-  }
-  .sidebar-footer .header-user { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; gap: 2px; }
-  #headerUserEmail { font-size: 12.5px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 
-  .main-content { flex: 1; min-width: 0; padding: 36px 44px 60px; display: flex; justify-content: center; }
-  .main-content-inner { width: 100%; max-width: var(--content-max); animation: fadeUp 0.4s ease-out; }
+  /* ---- Theme toggle (NEW element, see notes at end of chat) ---- */
+  .theme-toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px; }
+  .theme-toggle-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--label);
+    border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: var(--font-display); transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .theme-toggle-btn:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
+  .theme-toggle-btn i { font-size: 14px; }
 
-  /* ============================================================
-     NAV / KALENDER TOP BAR
-     ============================================================ */
-  .nav, .kal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
-  .nav button, .kal-nav button {
-    background: linear-gradient(135deg, var(--teal-500), var(--teal-700)); color: var(--accent-contrast); border: none;
-    border-radius: var(--radius-btn); width: 40px; height: 40px; flex-shrink: 0;
-    font-size: 16px; font-weight: 700; cursor: pointer;
-    box-shadow: 0 2px 4px rgba(14,148,136,0.20), 0 8px 20px -4px rgba(14,148,136,0.35);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  .main-content {
+    flex: 1; min-width: 0; padding: 32px 40px 60px;
+    display: flex; justify-content: center;
   }
-  .nav button:hover, .kal-nav button:hover { transform: translateY(-1px); }
-  .nav button:active, .kal-nav button:active { transform: scale(0.95); }
-  .tanggal-label, .kal-bulan-label {
-    font-weight: 700; font-size: 15px; text-align: center; flex-grow: 1;
-    font-family: var(--font-mono); color: var(--text);
+  .main-content-inner { width: 100%; max-width: var(--content-max); }
+
+  .nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
+  .nav button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dim)); color: var(--accent-contrast); border: none; border-radius: var(--radius-btn);
+    padding: 12px 18px; font-size: 14px; font-weight: 600; flex-shrink: 0; cursor: pointer;
+    box-shadow: var(--shadow-accent);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
   }
+  .nav button:hover { transform: translateY(-1px); filter: brightness(1.03); }
+  .nav button:active { transform: translateY(0); filter: brightness(0.97); }
+  .tanggal-label { font-weight: 600; font-size: 15px; text-align: center; flex-grow: 1; font-family: var(--font-mono); }
   .today-btn {
-    display: block; width: 100%; text-align: center; background: var(--surface);
-    border: 1px solid var(--border-strong); color: var(--accent-dim); border-radius: var(--radius-btn);
-    padding: 10px; font-size: 13px; margin-bottom: 16px; font-weight: 700; cursor: pointer;
-    box-shadow: var(--shadow-xs);
-    transition: background 0.15s ease, border-color 0.15s ease;
+    display: block; width: 100%; text-align: center; background: none;
+    border: 1px solid var(--accent); color: var(--accent-dim); border-radius: var(--radius-btn);
+    padding: 9px; font-size: 13px; margin-bottom: 16px; font-weight: 600; cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
   }
-  .today-btn:hover { background: var(--surface-2); border-color: var(--accent); }
+  .today-btn:hover { transform: translateY(-1px); }
+  .today-btn:active { background: var(--accent-soft); transform: translateY(0); }
 
-  /* ============================================================
-     CARD
-     ============================================================ */
   .card {
-    background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius);
-    padding: 18px; margin-bottom: 12px;
-    box-shadow: var(--shadow-sm);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.3s;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 12px;
+    box-shadow: var(--shadow-1);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background-color 0.25s ease;
+    animation: fadeInUp 0.28s ease both;
   }
-  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
-  .nama { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: var(--text); letter-spacing: -0.2px; }
+  .card:hover {
+    box-shadow: var(--shadow-2);
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+  }
+  .nama { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
   .obat-item {
-    font-size: 14px; padding: 9px 0; border-top: 1px solid var(--border);
-    display: flex; justify-content: space-between; color: var(--text-2); font-weight: 500;
+    font-size: 14px; padding: 7px 0; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; color: var(--label);
   }
   .obat-item:first-child { border-top: none; }
-  .obat-jumlah { font-weight: 700; color: var(--teal-700); font-family: var(--font-mono); }
-
+  .obat-jumlah { font-weight: 600; color: var(--accent-dim); font-family: var(--font-mono); }
   .empty {
     text-align: center; color: var(--muted); padding: 50px 20px; font-size: 14px;
-    background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius);
+    background: var(--surface); border: 1px dashed var(--border-strong); border-radius: var(--radius);
+    animation: fadeInUp 0.28s ease both;
   }
-  .empty i { display: block; font-size: 30px; margin-bottom: 10px; opacity: 0.4; color: var(--muted); }
-
+  .empty i { display: block; font-size: 26px; margin-bottom: 8px; opacity: 0.45; color: var(--muted); }
   .total-section {
     background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
-    padding: 18px; margin-top: 20px; box-shadow: var(--shadow-sm);
+    padding: 16px; margin-top: 20px; box-shadow: var(--shadow-1);
+    animation: fadeInUp 0.28s ease both;
   }
   .total-section h2 {
-    font-size: 14px; margin: 0 0 14px; color: var(--accent-dim); font-weight: 800; letter-spacing: -0.1px;
-    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; margin: 0 0 14px; color: var(--accent-dim); font-weight: 600; letter-spacing: 0.2px;
+    position: relative; padding-bottom: 8px; display: inline-block;
+  }
+  .total-section h2::after {
+    content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 64px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
   }
   .total-item {
-    font-size: 14px; padding: 7px 0; display: flex; justify-content: space-between;
-    color: var(--text-2); font-family: var(--font-mono); border-top: 1px solid var(--border);
+    font-size: 14px; padding: 6px 0; display: flex; justify-content: space-between; color: var(--label);
+    font-family: var(--font-mono);
   }
-  .total-item:first-of-type { border-top: none; }
-
   .loading-msg {
     text-align: center; padding: 40px 20px; font-size: 14px; display: block;
-    color: var(--muted); font-weight: 600;
+    background: linear-gradient(90deg, var(--muted) 25%, var(--label) 50%, var(--muted) 75%);
+    background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmerLoading 1.4s linear infinite;
   }
-  .loading-msg::before {
-    content: '\ea94'; font-family: 'tabler-icons' !important; display: block; font-size: 22px;
-    margin-bottom: 8px; animation: spin 1s linear infinite;
-  }
-  .ringkasan-jumlah { text-align: center; color: var(--label); font-size: 13px; margin-bottom: 14px; font-weight: 600; }
+  @keyframes shimmerLoading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .ringkasan-jumlah { text-align: center; color: var(--label); font-size: 13px; margin-bottom: 14px; }
 
-  /* ============================================================
-     FORM CONTROLS
-     ============================================================ */
   select, input[type="text"], input[type="date"], input[type="number"], input[type="email"], input[type="password"] {
-    width: 100%; padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
-    font-size: 14.5px; background: var(--surface-2); color: var(--text); margin-bottom: 16px;
-    font-family: var(--font-display); transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    width: 100%; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+    font-size: 15px; background: var(--surface); color: var(--text); margin-bottom: 16px;
+    font-family: var(--font-display);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.25s ease, color 0.25s ease;
   }
   select:focus, input:focus {
-    outline: none; border-color: var(--accent); background: var(--surface);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
   }
-  label.field-label { font-size: 12.5px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--label); }
+  label.field-label { font-size:13px; font-weight:600; display:block; margin-bottom:4px; color: var(--label); }
   input::placeholder { color: var(--muted); }
-
-  /* ============================================================
-     TIMELINE
-     ============================================================ */
   .timeline-item {
-    position: relative; padding: 10px 0 10px 22px; margin-left: 6px;
-    border-left: 2px solid var(--teal-500);
+    position: relative; padding: 10px 0 10px 20px; margin-left: 6px;
+    border-left: 2px solid var(--accent);
   }
   .timeline-item:last-child { border-left: 2px solid transparent; }
   .timeline-item::before {
     content: ''; position: absolute; left: -7px; top: 14px;
-    width: 12px; height: 12px; border-radius: 50%; background: var(--teal-500);
-    box-shadow: 0 0 0 3px var(--teal-50);
+    width: 12px; height: 12px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
-  .timeline-item.terakhir::before { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
-  .timeline-tanggal { font-weight: 700; font-size: 14px; font-family: var(--font-mono); color: var(--text); }
-  .timeline-siklus { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .timeline-item.terakhir::before { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .timeline-tanggal { font-weight: 600; font-size: 14px; font-family: var(--font-mono); }
+  .timeline-siklus { font-size: 12px; color: var(--muted); }
   .timeline-obat {
-    font-size: 13px; margin-top: 6px; background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 10px; padding: 9px 11px; color: var(--text-2); font-weight: 500;
+    font-size: 13px; margin-top: 5px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; color: var(--label);
   }
 
-  /* ============================================================
-     KALENDER GRID
-     ============================================================ */
+  .kal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .kal-nav button {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dim)); color: var(--accent-contrast); border: none; border-radius: var(--radius-btn);
+    padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: var(--shadow-accent);
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+  .kal-nav button:hover { transform: translateY(-1px); filter: brightness(1.03); }
+  .kal-bulan-label { font-weight: 600; font-size: 16px; font-family: var(--font-mono); }
   .kal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-  .kal-hari-label { text-align: center; font-size: 11.5px; color: var(--muted); font-weight: 700; padding-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .kal-hari-label { text-align: center; font-size: 12px; color: var(--muted); font-weight: 600; padding-bottom: 4px; }
   .kal-cell {
-    min-height: 92px; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius-sm);
-    padding: 7px; display: flex; flex-direction: column; font-size: 11px; overflow: hidden;
+    min-height: 92px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 6px 6px; display: flex; flex-direction: column; font-size: 11px; overflow: hidden;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   }
   .kal-cell.kosong { background: transparent; border-color: transparent; cursor: default; }
-  .kal-cell:not(.kosong):hover { box-shadow: var(--shadow-md); transform: translateY(-1px); border-color: var(--border-strong); }
-  .kal-cell.ada-jadwal { background: var(--accent-soft); border-color: var(--teal-500); }
+  .kal-cell:not(.kosong):hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+  .kal-cell.ada-jadwal { background: var(--accent-soft); border-color: var(--accent-dim); }
   .kal-cell.hari-ini { box-shadow: 0 0 0 2px var(--accent); }
-  .kal-cell.terpilih { background: linear-gradient(135deg, var(--teal-500), var(--teal-700)) !important; border-color: var(--teal-700); }
-  .kal-cell.terpilih .kal-tgl-num, .kal-cell.terpilih .kal-entri { color: #fff; }
-  .kal-tgl-num { font-weight: 800; font-size: 12px; margin-bottom: 4px; font-family: var(--font-mono); color: var(--text); }
-  .kal-entri { font-size: 10px; line-height: 1.35; color: var(--text-2); word-break: break-word; font-weight: 600; }
+  .kal-cell.terpilih { background: var(--accent) !important; border-color: var(--accent); box-shadow: var(--shadow-accent); }
+  .kal-cell.terpilih .kal-tgl-num, .kal-cell.terpilih .kal-entri { color: var(--accent-contrast); }
+  .kal-tgl-num { font-weight: 700; font-size: 12px; margin-bottom: 3px; font-family: var(--font-mono); }
+  .kal-entri { font-size: 10px; line-height: 1.3; color: var(--label); word-break: break-word; }
   .kal-entri-titik-tertunda {
     display: inline-block; width: 6px; height: 6px; border-radius: 50%;
     background: var(--danger); margin-left: 4px; flex-shrink: 0; vertical-align: middle;
   }
   .kal-cell.terpilih .kal-entri-titik-tertunda { background: #fff; box-shadow: 0 0 0 1px var(--danger) inset; }
+  .status-badge { box-shadow: 0 1px 3px rgba(20,25,20,0.14); }
 
-  /* ============================================================
-     BADGES / STATUS
-     ============================================================ */
-  .status-badge, .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 11px; border-radius: 99px;
-    font-size: 11px; font-weight: 700; font-family: var(--font-mono);
-    white-space: nowrap; letter-spacing: 0.2px;
-    box-shadow: inset 0 0 0 1px var(--border-2);
+  /* Extra: login screen */
+  #loginScreen {
+    max-width: 380px; margin: 90px auto; padding: 40px 20px;
+    background: radial-gradient(520px circle at 50% 0%, rgba(14,148,136,0.10), transparent 70%);
+    animation: fadeInUp 0.35s ease both;
   }
-  .badge .d, .status-badge .d { width: 6px; height: 6px; border-radius: 50%; }
-  .badge.tunda, .status-badge.tunda { background: var(--danger-bg); color: var(--danger); }
-  .badge.tunda .d, .status-badge.tunda .d { background: var(--danger); }
-  .badge.hari, .status-badge.hari { background: var(--teal-50); color: var(--teal-700); animation: pulse 2.2s infinite; }
-  .badge.hari .d, .status-badge.hari .d { background: var(--teal-500); }
-  .badge.sudah, .status-badge.sudah { background: var(--success-bg); color: var(--success); }
-  .badge.sudah .d, .status-badge.sudah .d { background: var(--success); }
+  #loginScreen .card { padding: 26px; transition: none; box-shadow: var(--shadow-3); }
+  #loginScreen .card:hover { box-shadow: var(--shadow-3); transform: none; }
+  #loginScreen .err { color: var(--danger); font-size: 13px; margin-top: -8px; margin-bottom: 12px; min-height: 16px; }
+  #loginScreen button.primary, .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dim)); color: var(--accent-contrast); border: none; border-radius: var(--radius-btn);
+    padding: 12px; font-size: 14px; font-weight: 700; width: 100%; cursor: pointer;
+    box-shadow: var(--shadow-accent);
+    transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+  }
+  #loginScreen button.primary:hover, .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.03); }
+  #loginScreen button.primary:disabled { opacity: 0.6; transform:none; }
+  #appScreen { display: none; }
 
-  /* ============================================================
-     PATIENT / DASHBOARD CARDS (dipakai oleh konten dinamis)
-     ============================================================ */
-  .pcard {
-    background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius);
-    padding: 18px; margin-bottom: 12px; border-left: 4px solid var(--teal-500);
-    box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
-  }
-  .pcard:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .pcard.tunda { border-left-color: var(--danger); background: linear-gradient(90deg, var(--danger-bg), var(--surface) 25%); }
-  .phead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 12px; }
-  .pname { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; color: var(--text); letter-spacing: -0.2px; }
-  .pname .init {
-    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
-    background: var(--teal-50); color: var(--teal-700);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 800; box-shadow: inset 0 0 0 1px var(--border-2);
-  }
-  .pcard.tunda .pname .init { background: var(--danger-bg); color: var(--danger); }
-  .pmeta { font-size: 12px; color: var(--muted); margin-bottom: 14px; margin-left: 44px; font-weight: 500; }
-  .orow { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; color: var(--text-2); font-weight: 500; }
-  .orow i { color: var(--teal-500); margin-right: 10px; font-size: 15px; }
-  .ojum { font-family: var(--font-mono); font-weight: 700; color: var(--teal-700); font-size: 14px; }
-  .sec { font-size: 14px; font-weight: 800; color: var(--text); margin: 0 0 14px; display: flex; align-items: center; gap: 8px; }
-  .sec i { color: var(--accent); font-size: 16px; }
-  .sec.danger i { color: var(--danger); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
-  .stat { background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-sm); }
-  .stat-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-  .ic { width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 20px; }
-  .ic.teal  { background: var(--teal-50);   color: var(--teal-600);   box-shadow: inset 0 0 0 1px var(--border-2); }
-  .ic.green { background: var(--success-bg); color: var(--success);   box-shadow: inset 0 0 0 1px var(--border-2); }
-  .ic.red   { background: var(--danger-bg);  color: var(--danger);    box-shadow: inset 0 0 0 1px var(--border-2); }
-  .ic.indi  { background: var(--indigo-50);  color: var(--indigo-600);box-shadow: inset 0 0 0 1px var(--border-2); }
-  .val { font-family: var(--font-mono); font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 6px; color: var(--text); }
-  .lbl { font-size: 12.5px; color: var(--muted); font-weight: 600; }
-  .stok { margin-bottom: 14px; }
-  .shead { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 7px; color: var(--text-2); font-weight: 600; }
-  .shead strong { font-family: var(--font-mono); color: var(--text); font-weight: 700; }
-  .prog { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(15,35,55,0.06); }
-  .prog > div { height: 100%; border-radius: 99px; transition: width 0.7s cubic-bezier(0.4,0,0.2,1); }
-  .prog.t > div { background: linear-gradient(90deg, var(--teal-500), var(--teal-600)); }
-  .prog.w > div { background: linear-gradient(90deg, #F59E0B, #D97706); }
-  .prog.d > div { background: linear-gradient(90deg, #EF4444, #DC2626); }
+  /* Extra: obat row builder for Daftarkan Pasien tab */
+  .obat-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .obat-row input { margin-bottom: 0; }
+  .obat-row input[data-f="obat"] { flex: 2; }
+  .obat-row input[data-f="jumlah"] { flex: 1; }
+  .obat-row button { flex-shrink: 0; background: var(--danger); color: #fff; border: none; border-radius: 8px; padding: 0 12px; font-size: 14px; cursor: pointer; transition: filter 0.15s ease; }
+  .obat-row button:hover { filter: brightness(1.08); }
+  .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-btn-sm); padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s ease, transform 0.15s ease; }
+  .btn-secondary:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
+  .btn-danger { background: linear-gradient(135deg, var(--danger), var(--danger-dim)); color: #fff; border: none; border-radius: var(--radius-btn-sm); padding: 8px 12px; font-size: 12px; width: 100%; cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease; box-shadow: 0 6px 16px rgba(226,59,87,0.24); }
+  .btn-danger:hover { transform: translateY(-1px); filter: brightness(1.03); }
+  .btn-neutral { background: var(--neutral); color: #fff; border: none; border-radius: var(--radius-btn-sm); padding: 8px 12px; font-size: 12px; width: 100%; cursor: pointer; transition: filter 0.15s ease, transform 0.15s ease; }
+  .btn-neutral:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .btn-accent { background: linear-gradient(135deg, var(--accent), var(--accent-dim)); color: var(--accent-contrast); border: none; border-radius: var(--radius-btn-sm); padding: 8px 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease; box-shadow: 0 6px 16px rgba(14,148,136,0.22); }
+  .btn-accent:hover { transform: translateY(-1px); filter: brightness(1.03); }
+  .status-msg { font-size: 13px; margin-top: 4px; min-height: 18px; }
+  .status-msg.ok { color: var(--success); }
+  .status-msg.error { color: var(--danger); }
 
-  /* ============================================================
-     PASIEN / OBAT LIST (Cari Obat, Daftar Pasien)
-     ============================================================ */
-  .pasien-list-card, #daftarPasienRiwayat, #daftarObatCariObat, #daftarPasienRiwayatPerawat {
-    background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius);
-    overflow: hidden; box-shadow: var(--shadow-sm);
+  /* Perawat-specific button accents (indigo) — scoped to perawat tab containers */
+  #tabTambahPerawat .btn-primary,
+  #tabRiwayatPerawat .btn-primary,
+  #tabKalenderPerawat .nav button,
+  #tabKalenderPerawat .kal-nav button,
+  #riwayatPerawatDetailWrap .btn-primary {
+    background: linear-gradient(135deg, var(--accent-2), var(--accent-2-dim));
+    box-shadow: var(--shadow-accent-2);
+  }
+  #tabTambahPerawat .btn-accent,
+  #tabRiwayatPerawat .btn-accent,
+  #riwayatPerawatDetailWrap .btn-accent {
+    background: linear-gradient(135deg, var(--accent-2), var(--accent-2-dim));
+    box-shadow: 0 6px 16px rgba(79,70,229,0.22);
+  }
+  #tabKalenderPerawat .kal-cell.ada-jadwal { background: var(--accent-2-soft); border-color: var(--accent-2-dim); }
+  #tabKalenderPerawat .kal-cell.hari-ini { box-shadow: 0 0 0 2px var(--accent-2); }
+  #tabKalenderPerawat .kal-cell.terpilih { background: var(--accent-2) !important; border-color: var(--accent-2); box-shadow: var(--shadow-accent-2); }
+  #tabKalenderPerawat .today-btn { border-color: var(--accent-2); color: var(--accent-2-dim); }
+  #tabKalenderPerawat .today-btn:active { background: var(--accent-2-soft); }
+
+  /* Two-column helper for wider forms on desktop */
+  .form-row-2 { display: flex; gap: 16px; }
+  .form-row-2 > div { flex: 1; }
+
+  /* Daftar Pasien / Cari Obat: list nama abjad + filter live */
+  .pasien-list-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; box-shadow: var(--shadow-1);
   }
   .pasien-item {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 14px 16px; font-size: 14px; color: var(--text); font-weight: 600;
+    padding: 13px 16px; font-size: 14px; color: var(--text);
     border-bottom: 1px solid var(--border); cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.12s ease;
   }
   .pasien-item:last-child { border-bottom: none; }
   .pasien-item:hover { background: var(--surface-2); }
   .pasien-item:active { background: var(--accent-soft); }
 
-  /* ============================================================
-     BUTTONS
-     ============================================================ */
-  .btn-primary {
-    background: linear-gradient(135deg, var(--teal-500), var(--teal-700)); color: var(--accent-contrast);
-    border: none; border-radius: var(--radius-btn); padding: 12px 20px; font-size: 14px; font-weight: 700;
-    width: 100%; cursor: pointer; font-family: inherit;
-    box-shadow: 0 2px 4px rgba(14,148,136,0.20), 0 8px 20px -4px rgba(14,148,136,0.35);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-  }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(14,148,136,0.25), 0 12px 28px -4px rgba(14,148,136,0.45); }
-  .btn-primary:active { transform: scale(0.98); }
-  .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-
-  .btn-secondary {
-    background: var(--surface); color: var(--text-2); border: 1px solid var(--border-strong);
-    border-radius: var(--radius-btn-sm); padding: 10px 16px; font-size: 13px; font-weight: 700;
-    cursor: pointer; font-family: inherit; box-shadow: var(--shadow-xs);
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  }
-  .btn-secondary:hover { background: var(--surface-2); color: var(--teal-700); border-color: var(--teal-500); }
-
-  .btn-danger {
-    background: var(--danger-bg); color: var(--danger); border: 1px solid var(--border-2);
-    border-radius: var(--radius-btn-sm); padding: 9px 12px; font-size: 12px; font-weight: 700;
-    width: 100%; cursor: pointer; font-family: inherit; transition: background 0.15s, color 0.15s;
-  }
-  .btn-danger:hover { background: var(--danger); color: #fff; }
-
-  .btn-neutral {
-    background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border-2);
-    border-radius: var(--radius-btn-sm); padding: 9px 12px; font-size: 12px; font-weight: 700;
-    width: 100%; cursor: pointer; font-family: inherit; transition: background 0.15s;
-  }
-  .btn-neutral:hover { background: var(--surface-3); }
-
-  .btn-accent {
-    background: linear-gradient(135deg, var(--teal-500), var(--teal-700)); color: #fff; border: none;
-    border-radius: var(--radius-btn-sm); padding: 9px 8px; font-size: 12px; font-weight: 700;
-    cursor: pointer; font-family: inherit; transition: transform 0.15s;
-  }
-  .btn-accent:hover { transform: translateY(-1px); }
-
-  .status-msg { font-size: 13px; margin-top: 6px; min-height: 18px; font-weight: 600; }
-  .status-msg.ok { color: var(--success); }
-  .status-msg.error { color: var(--danger); }
-
-  /* ============================================================
-     LOGIN SCREEN
-     ============================================================ */
-  #loginScreen {
-    max-width: 380px; margin: 90px auto; padding: 40px 20px; position: relative; z-index: 1;
-  }
-  #loginScreen .card { padding: 26px; }
-  #loginScreen .card:hover { transform: none; box-shadow: var(--shadow-sm); }
-  #loginScreen .err { color: var(--danger); font-size: 12.5px; margin-top: -8px; margin-bottom: 12px; min-height: 16px; font-weight: 600; }
-  #loginScreen button.primary {
-    background: linear-gradient(135deg, var(--teal-500), var(--teal-700)); color: var(--accent-contrast);
-    border: none; border-radius: var(--radius-btn); padding: 13px; font-size: 14px; font-weight: 700;
-    width: 100%; cursor: pointer; font-family: inherit;
-    box-shadow: 0 2px 4px rgba(14,148,136,0.20), 0 8px 20px -4px rgba(14,148,136,0.35);
-    transition: transform 0.15s ease;
-  }
-  #loginScreen button.primary:hover { transform: translateY(-1px); }
-  #loginScreen button.primary:disabled { opacity: 0.6; transform: none; cursor: not-allowed; }
-  #loginScreen > div:last-child { text-align: center; color: var(--muted); font-size: 11.5px; margin-top: 14px; font-weight: 500; }
-  #appScreen { display: none; }
-
-  /* ============================================================
-     OBAT ROW BUILDER
-     ============================================================ */
-  .obat-row { display: flex; gap: 7px; margin-bottom: 9px; }
-  .obat-row input { margin-bottom: 0; }
-  .obat-row input[data-f="obat"] { flex: 2; }
-  .obat-row input[data-f="jumlah"] { flex: 1; }
-  .obat-row button {
-    flex-shrink: 0; background: var(--danger-bg); color: var(--danger); border: 1px solid var(--border-2);
-    border-radius: 10px; padding: 0 14px; font-size: 14px; cursor: pointer; transition: background 0.15s, color 0.15s;
-  }
-  .obat-row button:hover { background: var(--danger); color: #fff; }
-
-  .form-row-2 { display: flex; gap: 16px; }
-  .form-row-2 > div { flex: 1; }
-
-  /* ============================================================
-     TOASTS + MODAL (untuk konfirmasi hapus dsb.)
-     ============================================================ */
-  .toasts { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; pointer-events: none; }
-  .toast {
-    background: var(--surface); border: 1px solid var(--border-2); border-left: 4px solid var(--teal-500);
-    border-radius: var(--radius-sm); padding: 13px 16px; min-width: 300px; box-shadow: var(--shadow-lg);
-    display: flex; align-items: center; gap: 11px; font-size: 13.5px; font-weight: 600; color: var(--text);
-    pointer-events: auto; animation: toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
-  }
-  .toast.ok { border-left-color: var(--success); }
-  .toast.err { border-left-color: var(--danger); }
-  .toast.inf { border-left-color: var(--info); }
-  .toast.hide { animation: toastOut 0.25s ease-in both; }
-
-  .overlay {
-    position: fixed; inset: 0; background: rgba(15,30,46,0.5); display: none;
-    align-items: center; justify-content: center; z-index: 9998; backdrop-filter: blur(6px);
-    animation: fadeIn 0.2s ease-out;
-  }
-  html.dark .overlay { background: rgba(0,0,0,0.7); }
-  .overlay.show { display: flex; }
-  .modal {
-    background: var(--surface); border-radius: var(--radius-lg); padding: 28px; max-width: 420px; width: 90%;
-    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-2); animation: modalIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
-  }
-  .modal h3 { margin: 0 0 10px; font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-  .modal p { margin: 0 0 22px; font-size: 14px; color: var(--label); line-height: 1.6; font-weight: 500; }
-  .mact { display: flex; gap: 8px; justify-content: flex-end; }
-
-  /* ============================================================
-     THEME TOGGLE
-     ============================================================ */
-  .theme-toggle {
-    position: fixed; bottom: 20px; right: 20px; width: 48px; height: 48px; border-radius: 50%;
-    background: var(--surface); border: 1px solid var(--border-strong); color: var(--text);
-    font-size: 20px; cursor: pointer; box-shadow: var(--shadow-lg); z-index: 9997;
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.25s, box-shadow 0.25s, background 0.3s;
-  }
-  .theme-toggle:hover { transform: scale(1.1) rotate(15deg); box-shadow: var(--shadow-lg), 0 0 0 4px var(--accent-soft); }
-
-  /* ============================================================
-     ANIMATIONS
-     ============================================================ */
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes modalIn { from { opacity: 0; transform: scale(0.94) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-  @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
-  @keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(40px); } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes pulse {
-    0%, 100% { box-shadow: inset 0 0 0 1px var(--border-2), 0 0 0 0 var(--accent-soft); }
-    50%      { box-shadow: inset 0 0 0 1px var(--border-2), 0 0 0 6px transparent; }
+  /* ---- Toast container (NEW element, see notes at end of chat) ---- */
+  #toastContainer {
+    position: fixed; bottom: 18px; right: 18px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
   }
 
-  /* ============================================================
-     RESPONSIVE
-     ============================================================ */
+  /* Collapse back to mobile layout on narrow viewports */
   @media (max-width: 860px) {
     .app-shell { flex-direction: column; }
-    .sidebar { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border-2); padding: 16px; }
+    .sidebar {
+      width: 100%; height: auto; position: static; border-right: none;
+      border-bottom: 1px solid var(--border); padding: 16px;
+    }
     .sidebar .header { text-align: center; }
     .tabs { flex-direction: row; flex-wrap: wrap; gap: 8px; }
     .tab-btn { min-width: 30%; flex: 1; justify-content: center; }
-    .tab-btn.active { padding-left: 12px; }
-    .tab-btn.active::before { display: none; }
     .sidebar-footer { margin-top: 12px; }
     .main-content { padding: 20px 16px 60px; }
+    .theme-toggle-row { justify-content: center; }
   }
 </style>
 </head>
@@ -629,10 +436,10 @@
 <!-- ================= LOGIN SCREEN ================= -->
 <div id="loginScreen">
   <div class="header">
-    <h1>
-      <span class="brand-mark"><i class="ti ti-vaccine-bottle" aria-hidden="true"></i></span>
-      <span class="brand-text">Jadwal Kemoterapi</span>
-    </h1>
+    <h1><i class="ti ti-vaccine-bottle" aria-hidden="true"></i> Jadwal Kemoterapi</h1>
+    <svg class="header-pulse" width="140" height="20" viewBox="0 0 140 20" fill="none">
+      <path d="M0 10 H45 L52 2 L60 18 L67 10 H140" stroke="#0E9488" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.7"/>
+    </svg>
   </div>
   <div class="card">
     <label class="field-label">ID</label>
@@ -642,7 +449,7 @@
     <div class="err" id="loginError"></div>
     <button class="primary" id="loginBtn" onclick="handleLogin()">Masuk</button>
   </div>
-  <div>Akun dibuat oleh admin lewat Supabase Dashboard &gt; Authentication.</div>
+  <div style="text-align:center; color:var(--muted); font-size:12px;">Akun dibuat oleh admin lewat Supabase Dashboard &gt; Authentication.</div>
 </div>
 
 <!-- ================= APP SCREEN ================= -->
@@ -652,10 +459,18 @@
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar">
     <div class="header">
-      <h1>
-        <span class="brand-mark"><i class="ti ti-vaccine-bottle" aria-hidden="true"></i></span>
-        <span class="brand-text">Jadwal Kemo</span>
-      </h1>
+      <h1><i class="ti ti-vaccine-bottle" aria-hidden="true"></i> Jadwal Kemoterapi</h1>
+      <svg class="header-pulse" width="140" height="20" viewBox="0 0 140 20" fill="none">
+        <path d="M0 10 H45 L52 2 L60 18 L67 10 H140" stroke="#0E9488" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.7"/>
+      </svg>
+    </div>
+
+    <!-- Theme toggle row: NEW, purely cosmetic, does not touch app.js -->
+    <div class="theme-toggle-row">
+      <button type="button" class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleAppTheme()">
+        <i class="ti ti-moon" id="themeToggleIcon" aria-hidden="true"></i>
+        <span id="themeToggleLabel">Mode Gelap</span>
+      </button>
     </div>
 
     <nav class="tabs">
@@ -675,11 +490,7 @@
     </nav>
 
     <div class="sidebar-footer">
-      <div class="sidebar-avatar" id="sidebarAvatar">?</div>
-      <div class="header-user">
-        <span id="headerUserEmail"></span>
-        <button onclick="handleLogout()">Keluar</button>
-      </div>
+      <div class="header-user"><span id="headerUserEmail"></span><button onclick="handleLogout()">Keluar</button></div>
     </div>
   </aside>
 
@@ -708,7 +519,7 @@
         <div class="kal-grid" id="kalGrid" style="margin-top:4px;"></div>
         <div id="loadingKalender" class="loading-msg">Memuat...</div>
 
-        <div id="kalDetailLabel" style="font-weight:800; font-size:15px; text-align:center; margin-top:22px; color:var(--text);"></div>
+        <div id="kalDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
         <div id="loadingKalDetail" class="loading-msg">Memuat jadwal...</div>
         <div id="kalDetailContainer"></div>
       </div>
@@ -717,7 +528,7 @@
       <div id="tabRentang" style="display:none">
         <div class="card" style="margin-bottom:20px;">
           <div class="nama" style="font-size:14px;">Update Stok</div>
-          <div style="font-size:12px; color:var(--muted); margin:-4px 0 12px; font-weight:500;">
+          <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">
             Isi jumlah stok yang <strong>TERSEDIA SAAT INI</strong> untuk tiap obat. Nilai ini akan
             MENGGANTIKAN (bukan menambah) jumlah stok lama untuk obat yang sama.
           </div>
@@ -757,7 +568,7 @@
 
         <div id="riwayatDetailWrap" style="display:none">
           <button type="button" class="btn-secondary" onclick="kembaliKeDaftarPasien()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
-          <div id="riwayatDetailNama" style="font-size:18px; font-weight:800; margin-bottom:8px; color:var(--text);"></div>
+          <div id="riwayatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
           <div id="loadingRiwayat" class="loading-msg" style="display:none;">Memuat riwayat...</div>
           <div class="ringkasan-jumlah" id="ringkasanRiwayat"></div>
           <div id="contentRiwayat"></div>
@@ -778,7 +589,7 @@
                 <input type="text" id="riwayatTambahSiklusAkhir" placeholder="cth: 3">
               </div>
             </div>
-            <label class="field-label">Interval (hari) <span style="font-weight:500; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
+            <label class="field-label">Interval (hari) <span style="font-weight:normal; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
             <input type="number" id="riwayatTambahInterval" placeholder="cth: 21" min="1">
 
             <label class="field-label">Daftar Obat</label>
@@ -805,7 +616,13 @@
         <div id="contentDashboard"></div>
       </div>
 
-      <!-- ===== TAB 6: CARI OBAT (FARMASI) ===== -->
+      <!-- ===== TAB 6: CARI OBAT (FARMASI) =====
+           Diperbaiki: sekarang mengikuti pola list -> detail, sama seperti
+           tab "Daftar Pasien". Begitu tab dibuka, muatDaftarObatUntukPencarian()
+           di app.js akan menampilkan SEMUA nama obat + stok saat ini di
+           #daftarObatCariObat (bisa difilter langsung lewat #obatSearchInput).
+           Klik salah satu obat -> pindah ke #cariObatDetailWrap yang berisi
+           jadwal pemakaian terdekat + riwayat pemakaian yang sudah lewat. -->
       <div id="tabCariObat" style="display:none">
 
         <div id="cariObatListWrap">
@@ -816,7 +633,7 @@
 
         <div id="cariObatDetailWrap" style="display:none">
           <button type="button" class="btn-secondary" onclick="kembaliKeDaftarObat()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
-          <div id="cariObatDetailNama" style="font-size:18px; font-weight:800; margin-bottom:8px; color:var(--text);"></div>
+          <div id="cariObatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
           <div id="loadingCariObat" class="loading-msg" style="display:none;">Memuat detail...</div>
           <div class="ringkasan-jumlah" id="ringkasanCariObat"></div>
           <div id="contentCariObat"></div>
@@ -829,11 +646,11 @@
         <label class="field-label">Nama Pasien</label>
         <input type="text" id="tambahPatientSelect" list="patientDatalistTambah" placeholder="Ketik nama pasien (baru atau lama)..." autocomplete="off">
         <datalist id="patientDatalistTambah"></datalist>
-        <div id="regimenInfo" style="font-size:12px; color:var(--muted); margin:-8px 0 14px; font-weight:500;"></div>
+        <div id="regimenInfo" style="font-size:12px; color:var(--muted); margin:-8px 0 14px;"></div>
 
         <label class="field-label">Tanggal Kemo (Siklus Awal)</label>
         <input type="date" id="tambahTanggal">
-        <div id="intervalWarning" style="display:none; font-size:12px; color:var(--warning); background:var(--warning-bg); border:1px solid var(--border-2); border-radius:var(--radius-sm); padding:9px 11px; margin:-8px 0 14px; font-weight:600;"></div>
+        <div id="intervalWarning" style="display:none; font-size:12px; color:#92400E; background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:8px 10px; margin:-8px 0 14px;"></div>
 
         <div class="form-row-2">
           <div>
@@ -845,7 +662,7 @@
             <input type="text" id="tambahSiklusAkhir" placeholder="cth: 3">
           </div>
         </div>
-        <label class="field-label">Interval (hari) <span style="font-weight:500; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
+        <label class="field-label">Interval (hari) <span style="font-weight:normal; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
         <input type="number" id="tambahInterval" placeholder="cth: 21" min="1">
 
         <label class="field-label">Daftar Obat</label>
@@ -878,7 +695,7 @@
         <div class="kal-grid" id="kalPerawatGrid" style="margin-top:4px;"></div>
         <div id="loadingKalenderPerawat" class="loading-msg">Memuat...</div>
 
-        <div id="kalPerawatDetailLabel" style="font-weight:800; font-size:15px; text-align:center; margin-top:22px; color:var(--text);"></div>
+        <div id="kalPerawatDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
         <div id="loadingKalPerawatDetail" class="loading-msg">Memuat jadwal...</div>
         <div id="kalPerawatDetailContainer"></div>
       </div>
@@ -894,7 +711,7 @@
 
         <div id="riwayatPerawatDetailWrap" style="display:none">
           <button type="button" class="btn-secondary" onclick="kembaliKeDaftarPasienPerawat()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
-          <div id="riwayatPerawatDetailNama" style="font-size:18px; font-weight:800; margin-bottom:8px; color:var(--text);"></div>
+          <div id="riwayatPerawatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
           <div id="loadingRiwayatPerawat" class="loading-msg" style="display:none;">Memuat riwayat...</div>
           <div class="ringkasan-jumlah" id="ringkasanRiwayatPerawat"></div>
           <div id="contentRiwayatPerawat"></div>
@@ -915,7 +732,7 @@
                 <input type="text" id="riwayatPerawatTambahSiklusAkhir" placeholder="cth: 3">
               </div>
             </div>
-            <label class="field-label">Interval Antar Siklus (hari) <span style="font-weight:500; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
+            <label class="field-label">Interval Antar Siklus (hari) <span style="font-weight:normal; color:var(--muted);">— dipakai kalau lebih dari 1 siklus</span></label>
             <input type="number" id="riwayatPerawatTambahInterval" placeholder="cth: 21" min="1">
 
             <label class="field-label">Lama Hari (Rawat Inap per Siklus)</label>
@@ -933,7 +750,7 @@
         <label class="field-label">Nama Pasien</label>
         <input type="text" id="tambahPerawatNama" list="nursePatientDatalistTambah" placeholder="Ketik nama pasien (baru atau lama)..." autocomplete="off">
         <datalist id="nursePatientDatalistTambah"></datalist>
-        <div id="regimenInfoPerawat" style="font-size:12px; color:var(--muted); margin:-8px 0 14px; font-weight:500;"></div>
+        <div id="regimenInfoPerawat" style="font-size:12px; color:var(--muted); margin:-8px 0 14px;"></div>
 
         <div class="form-row-2">
           <div>
@@ -958,12 +775,12 @@
             <input type="text" id="tambahPerawatSiklus" placeholder="cth: 1">
           </div>
           <div>
-            <label class="field-label">Sampai Siklus <span style="font-weight:500; color:var(--muted);">(opsional)</span></label>
+            <label class="field-label">Sampai Siklus <span style="font-weight:normal; color:var(--muted);">(opsional)</span></label>
             <input type="text" id="tambahPerawatSiklusAkhir" placeholder="cth: 4 — kosongkan jika 1 siklus">
           </div>
         </div>
 
-        <label class="field-label">Interval Antar Siklus (hari) <span style="font-weight:500; color:var(--muted);">— wajib diisi kalau membuat lebih dari 1 siklus sekaligus</span></label>
+        <label class="field-label">Interval Antar Siklus (hari) <span style="font-weight:normal; color:var(--muted);">— wajib diisi kalau membuat lebih dari 1 siklus sekaligus</span></label>
         <input type="number" id="tambahPerawatInterval" placeholder="cth: 21" min="1">
 
         <label class="field-label">Lama Hari (Rawat Inap per Siklus)</label>
@@ -979,92 +796,50 @@
 </div>
 </div><!-- /appScreen -->
 
-<!-- ==================== TOAST CONTAINER (opsional, dipakai jika app.js memanggil toast()) ==================== -->
-<div class="toasts" id="toasts"></div>
-
-<!-- ==================== THEME TOGGLE ==================== -->
-<button class="theme-toggle" onclick="toggleTheme()" title="Ganti tema">
-  <i class="ti ti-moon" id="themeIcon"></i>
-</button>
-
-<script>
-  /* ============================================================
-     THEME TOGGLE (light / dark) — murni tampilan, tidak menyentuh
-     logika aplikasi (login, tab, Supabase) di app.js
-     ============================================================ */
-  function applyTheme(theme) {
-    const isDark = theme === 'dark';
-    document.documentElement.classList.toggle('dark', isDark);
-    document.documentElement.classList.toggle('light', !isDark);
-    const icon = document.getElementById('themeIcon');
-    if (icon) icon.className = isDark ? 'ti ti-sun' : 'ti ti-moon';
-  }
-
-  function toggleTheme() {
-    const isDark = document.documentElement.classList.contains('dark');
-    const next = isDark ? 'light' : 'dark';
-    applyTheme(next);
-    try { localStorage.setItem('kemo-theme', next); } catch (e) {}
-  }
-
-  (function initTheme() {
-    let saved = null;
-    try { saved = localStorage.getItem('kemo-theme'); } catch (e) {}
-    if (saved === 'dark' || saved === 'light') {
-      applyTheme(saved);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      applyTheme('dark');
-    } else {
-      applyTheme('light');
-    }
-  })();
-
-  /* ============================================================
-     Avatar sidebar & warna aksen indigo untuk tab Perawat — kosmetik
-     saja, tidak mengubah fungsi switchTab/handleLogout di app.js
-     ============================================================ */
-  (function cosmeticEnhancements() {
-    const emailEl = document.getElementById('headerUserEmail');
-    const avatarEl = document.getElementById('sidebarAvatar');
-    function updateAvatar() {
-      if (!emailEl || !avatarEl) return;
-      const t = (emailEl.textContent || '').trim();
-      avatarEl.textContent = t ? t.charAt(0).toUpperCase() : '?';
-    }
-    if (emailEl && window.MutationObserver) {
-      new MutationObserver(updateAvatar).observe(emailEl, { childList: true, characterData: true, subtree: true });
-    }
-    updateAvatar();
-
-    // Beri aksen indigo secara visual saat salah satu tab Perawat aktif,
-    // dan pantau tab aktif untuk mengganti warna avatar (tanpa mengubah
-    // fungsi switchTab asli dari app.js).
-    const perawatTabIds = ['tabBtnKalenderPerawat', 'tabBtnRiwayatPerawat', 'tabBtnTambahPerawat'];
-    const root = document.documentElement;
-    function applyAccentForActiveTab() {
-      const activeBtn = document.querySelector('.tab-btn.active');
-      const isPerawat = activeBtn && perawatTabIds.includes(activeBtn.id);
-      if (isPerawat) {
-        root.style.setProperty('--accent', 'var(--indigo-600)');
-        root.style.setProperty('--accent-dim', 'var(--indigo-700)');
-        root.style.setProperty('--accent-soft', 'var(--indigo-50)');
-        avatarEl && avatarEl.classList.add('perawat');
-      } else {
-        root.style.setProperty('--accent', 'var(--teal-600)');
-        root.style.setProperty('--accent-dim', 'var(--teal-700)');
-        root.style.setProperty('--accent-soft', 'var(--teal-50)');
-        avatarEl && avatarEl.classList.remove('perawat');
-      }
-    }
-    document.querySelectorAll('.tab-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () { setTimeout(applyAccentForActiveTab, 0); });
-    });
-    applyAccentForActiveTab();
-  })();
-</script>
+<!-- NEW: toast container placeholder (empty by default — see notes at end of chat) -->
+<div id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+
+<!-- NEW: standalone theme-toggle script — does NOT touch app.js/config.js
+     or any existing function/onclick. Purely adds dark/light mode. -->
+<script>
+  (function () {
+    var root = document.documentElement;
+    var STORAGE_KEY = 'jadwalKemoTheme';
+
+    function applyTheme(theme) {
+      if (theme === 'dark') {
+        root.setAttribute('data-theme', 'dark');
+      } else {
+        root.removeAttribute('data-theme');
+      }
+      var icon = document.getElementById('themeToggleIcon');
+      var label = document.getElementById('themeToggleLabel');
+      if (icon && label) {
+        if (theme === 'dark') {
+          icon.className = 'ti ti-sun';
+          label.textContent = 'Mode Terang';
+        } else {
+          icon.className = 'ti ti-moon';
+          label.textContent = 'Mode Gelap';
+        }
+      }
+    }
+
+    var saved = null;
+    try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    applyTheme(saved === 'dark' ? 'dark' : 'light');
+
+    window.toggleAppTheme = function () {
+      var isDark = root.getAttribute('data-theme') === 'dark';
+      var next = isDark ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem(STORAGE_KEY, next); } catch (e) {}
+    };
+  })();
+</script>
 </body>
 </html>
