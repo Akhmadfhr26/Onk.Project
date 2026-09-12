@@ -169,10 +169,10 @@ function muatKalenderPerawat() {
   var tahun = nurseBulanKalenderAktif.getFullYear();
   var bulan = nurseBulanKalenderAktif.getMonth() + 1;
   document.getElementById('kalPerawatBulanLabel').innerText = NAMA_BULAN[bulan - 1] + ' ' + tahun;
-  document.getElementById('loadingKalenderPerawat').style.display = 'block';
+  setLoading('loadingKalenderPerawat', true, 'kalender');
 
   loadAllNurseSchedules().then(function (list) {
-    document.getElementById('loadingKalenderPerawat').style.display = 'none';
+    setLoading('loadingKalenderPerawat', false);
     var hariData = {};
     list.forEach(function (s) {
       for (var h = 0; h < s.lamaHari; h++) {
@@ -233,12 +233,12 @@ function pilihTanggalKalenderPerawat(tgl) {
 function muatDetailTanggalPerawat() {
   document.getElementById('kalPerawatTanggalJump').value = toIsoDate(nurseTanggalAktif);
   document.getElementById('kalPerawatDetailLabel').innerText = formatTampilan(nurseTanggalAktif);
-  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  setLoading('loadingKalPerawatDetail', true, 'list');
   document.getElementById('loadingKalPerawatDetail').innerText = 'Memuat jadwal...';
   document.getElementById('kalPerawatDetailContainer').innerHTML = '';
 
   loadAllNurseSchedules().then(function (list) {
-    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    setLoading('loadingKalPerawatDetail', false);
     var target = dateOnly(nurseTanggalAktif).getTime();
     var matches = [];
     list.forEach(function (s) {
@@ -310,7 +310,7 @@ function renderJadwalTanggalPerawat(matches) {
 function toggleTertundaPerawat(i, jadiTertunda) {
   var p = nursePasienListTerakhirTanggal[i];
   if (!p) return;
-  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  setLoading('loadingKalPerawatDetail', true);
   document.getElementById('loadingKalPerawatDetail').innerText = jadiTertunda ? 'Menandai...' : 'Membatalkan tanda...';
 
   var ketLama = p.keterangan || '';
@@ -326,7 +326,7 @@ function toggleTertundaPerawat(i, jadiTertunda) {
     invalidateNurseCacheAndReload();
     muatDetailTanggalPerawat();
   }).catch(function (err) {
-    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    setLoading('loadingKalPerawatDetail', false);
     alert('Gagal: ' + err.message);
   });
 }
@@ -345,7 +345,7 @@ function simpanUbahJadwalPerawat(i) {
   if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
   var geser = document.getElementById('geserBerikutnyaPerawat' + i).checked;
 
-  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  setLoading('loadingKalPerawatDetail', true);
   document.getElementById('loadingKalPerawatDetail').innerText = 'Menyimpan perubahan...';
 
   var tanggalLamaObj = dateOnly(p.dateObjMulai);
@@ -372,7 +372,7 @@ function simpanUbahJadwalPerawat(i) {
     invalidateNurseCacheAndReload();
     muatDetailTanggalPerawat();
   }).catch(function (err) {
-    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    setLoading('loadingKalPerawatDetail', false);
     alert('Gagal: ' + err.message);
   });
 }
@@ -383,7 +383,7 @@ function hapusJadwalPerawatDariKalender(i) {
   var konfirmasi = window.confirm('Yakin mau menghapus jadwal ' + p.nama + ' (Siklus ' + p.siklus + ')?\n\nSeluruh rentang hari (H1-H' + p.lamaHari + ') untuk siklus ini akan terhapus. Tindakan ini tidak bisa dibatalkan.');
   if (!konfirmasi) return;
 
-  document.getElementById('loadingKalPerawatDetail').style.display = 'block';
+  setLoading('loadingKalPerawatDetail', true);
   document.getElementById('loadingKalPerawatDetail').innerText = 'Menghapus...';
 
   sb.from('nurse_schedules').delete().eq('id', p.id).then(function (res) {
@@ -391,7 +391,7 @@ function hapusJadwalPerawatDariKalender(i) {
     invalidateNurseCacheAndReload();
     muatDetailTanggalPerawat();
   }).catch(function (err) {
-    document.getElementById('loadingKalPerawatDetail').style.display = 'none';
+    setLoading('loadingKalPerawatDetail', false);
     alert('Gagal: ' + err.message);
   });
 }
@@ -408,14 +408,14 @@ function hapusJadwalPerawatDariKalender(i) {
 //   (pasien yang seluruh jadwalnya sudah dihapus tidak ikut muncul).
 // - Menyimpan no_rm supaya bisa ikut dicari lewat kotak pencarian.
 function muatDaftarPasienPerawat() {
-  document.getElementById('loadingRiwayatPerawatList').style.display = 'block';
+  setLoading('loadingRiwayatPerawatList', true, 'list');
   Promise.all([
     sb.from('nurse_patients').select('id, nama, no_rm').order('nama'),
     loadAllNurseSchedules()
   ]).then(function (results) {
     var patientsRes = results[0];
     var schedules = results[1];
-    document.getElementById('loadingRiwayatPerawatList').style.display = 'none';
+    setLoading('loadingRiwayatPerawatList', false);
     if (patientsRes.error) {
       document.getElementById('daftarPasienRiwayatPerawat').innerHTML = 'Gagal memuat: ' + escapeHtml(patientsRes.error.message);
       return;
@@ -431,7 +431,7 @@ function muatDaftarPasienPerawat() {
 
     renderDaftarPasienRiwayatPerawat(document.getElementById('riwayatPerawatSearchInput').value);
   }).catch(function (err) {
-    document.getElementById('loadingRiwayatPerawatList').style.display = 'none';
+    setLoading('loadingRiwayatPerawatList', false);
     document.getElementById('daftarPasienRiwayatPerawat').innerHTML = 'Gagal memuat: ' + escapeHtml(err.message);
   });
 }
@@ -499,11 +499,11 @@ function kembaliKeDaftarPasienPerawat() {
 function muatRiwayatPasienDetailPerawat(nama) {
   document.getElementById('contentRiwayatPerawat').innerHTML = '';
   document.getElementById('ringkasanRiwayatPerawat').innerHTML = '';
-  document.getElementById('loadingRiwayatPerawat').style.display = 'block';
+  setLoading('loadingRiwayatPerawat', true, 'riwayat');
   document.getElementById('loadingRiwayatPerawat').innerText = 'Memuat riwayat...';
 
   loadAllNurseSchedules().then(function (list) {
-    document.getElementById('loadingRiwayatPerawat').style.display = 'none';
+    setLoading('loadingRiwayatPerawat', false);
     var mine = list.filter(function (s) { return s.nama.toLowerCase() === nama.toLowerCase(); });
     mine.sort(function (a, b) { return a.dateObjMulai.getTime() - b.dateObjMulai.getTime(); });
 
@@ -582,7 +582,7 @@ function simpanUbahTanggalRiwayatPerawat(i) {
   if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
   var geser = document.getElementById('geserBerikutnyaRiwayatPerawat' + i).checked;
 
-  document.getElementById('loadingRiwayatPerawat').style.display = 'block';
+  setLoading('loadingRiwayatPerawat', true);
   document.getElementById('loadingRiwayatPerawat').innerText = 'Menyimpan perubahan...';
 
   var tanggalLamaObj = dateOnly(p.dateObjMulai);
@@ -609,7 +609,7 @@ function simpanUbahTanggalRiwayatPerawat(i) {
     invalidateNurseCacheAndReload();
     muatRiwayatPasienDetailPerawat(nurseRiwayatPasienAktif);
   }).catch(function (err) {
-    document.getElementById('loadingRiwayatPerawat').style.display = 'none';
+    setLoading('loadingRiwayatPerawat', false);
     alert('Gagal: ' + err.message);
   });
 }
@@ -620,7 +620,7 @@ function hapusJadwalRiwayatPerawat(i) {
   var konfirmasi = window.confirm('Yakin mau menghapus jadwal (Siklus ' + p.siklus + ') mulai ' + p.tanggalMulai + '?\n\nTindakan ini tidak bisa dibatalkan.');
   if (!konfirmasi) return;
 
-  document.getElementById('loadingRiwayatPerawat').style.display = 'block';
+  setLoading('loadingRiwayatPerawat', true);
   document.getElementById('loadingRiwayatPerawat').innerText = 'Menghapus...';
 
   sb.from('nurse_schedules').delete().eq('id', p.id).then(function (res) {
@@ -628,7 +628,7 @@ function hapusJadwalRiwayatPerawat(i) {
     invalidateNurseCacheAndReload();
     muatRiwayatPasienDetailPerawat(nurseRiwayatPasienAktif);
   }).catch(function (err) {
-    document.getElementById('loadingRiwayatPerawat').style.display = 'none';
+    setLoading('loadingRiwayatPerawat', false);
     alert('Gagal: ' + err.message);
   });
 }
