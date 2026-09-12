@@ -447,6 +447,13 @@
   .progress-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
   .progress-label { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--label); white-space: nowrap; min-width: 56px; text-align: right; }
 
+  /* ---- Daftar Pasien sebagai kartu (bukan baris list polos) ---- */
+  .pasien-card-list { display: flex; flex-direction: column; gap: 10px; }
+  .card-pasien-row {
+    display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 0;
+  }
+  .card-pasien-row .nama-info { margin: 0; }
+
   /* Collapse back to mobile layout on narrow viewports */
   @media (max-width: 860px) {
     .app-shell { flex-direction: column; }
