@@ -109,7 +109,8 @@
           <div class="nama" style="font-size:14px;">Update Stok</div>
           <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">
             Isi jumlah stok yang <strong>TERSEDIA SAAT INI</strong> untuk tiap obat. Nilai ini akan
-            MENGGANTIKAN (bukan menambah) jumlah stok lama untuk obat yang sama.
+            MENGGANTIKAN (bukan menambah) jumlah stok lama untuk obat yang sama. Tanggal
+            update tercatat otomatis — tidak perlu diisi manual.
           </div>
           <div id="stokRowsContainer"></div>
           <div style="display:flex; gap:8px; margin-bottom:8px;">
@@ -119,7 +120,7 @@
           <div class="status-msg" id="stokMasukStatus"></div>
         </div>
 
-        <!-- ===== NEW: INPUT PEMAKAIAN OBAT (mengurangi stok saat submit) ===== -->
+        <!-- ===== INPUT PEMAKAIAN OBAT (mengurangi stok saat submit) ===== -->
         <div class="card" style="margin-bottom:20px;">
           <div class="nama" style="font-size:14px;">Input Pemakaian Obat</div>
           <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">
@@ -133,7 +134,7 @@
           </div>
           <div class="status-msg" id="pemakaianStatus"></div>
         </div>
-        <!-- ===== END NEW ===== -->
+        <!-- ===== END ===== -->
 
         <div class="form-row-2">
           <div>
@@ -391,7 +392,7 @@
 </div>
 </div><!-- /appScreen -->
 
-<!-- NEW: toast container placeholder (empty by default — see notes at end of chat) -->
+<!-- toast container placeholder (empty by default) -->
 <div id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -401,7 +402,7 @@
 <script src="farmasi.js"></script>
 <script src="perawat.js"></script>
 
-<!-- NEW: standalone theme-toggle script — does NOT touch app.js/config.js
+<!-- standalone theme-toggle script — does NOT touch app.js/config.js
      or any existing function/onclick. Purely adds dark/light mode. -->
 <script>
   (function () {
