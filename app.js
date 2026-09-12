@@ -928,15 +928,16 @@ function renderDaftarPasienRiwayat(filter) {
     return;
   }
 
-  var html = '<div class="pasien-list-card">';
+  var html = '<div class="pasien-card-list">';
   filtered.forEach(function (nama, idx) {
-    html += '<div class="pasien-item" data-idx="' + idx + '">' + renderAvatarInisial(nama, 'Belum Kemo') +
-      '<span style="flex:1; margin-left:10px;">' + escapeHtml(nama) + '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
+    html += '<div class="card card-pasien-row" data-idx="' + idx + '">' + renderAvatarInisial(nama, 'Belum Kemo') +
+      '<div class="nama-info"><div class="nama" style="margin-bottom:0;">' + escapeHtml(nama) + '</div></div>' +
+      '<i class="ti ti-chevron-right" aria-hidden="true" style="color:var(--muted); font-size:18px; flex-shrink:0;"></i></div>';
   });
   html += '</div>';
   container.innerHTML = html;
 
-  container.querySelectorAll('.pasien-item').forEach(function (el) {
+  container.querySelectorAll('.card-pasien-row').forEach(function (el) {
     el.addEventListener('click', function () {
       var idx = parseInt(this.getAttribute('data-idx'), 10);
       pilihPasienRiwayat(filtered[idx]);
@@ -2307,17 +2308,17 @@ function renderDaftarPasienRiwayatPerawat(filter) {
     return;
   }
 
-  var html = '<div class="pasien-list-card">';
+  var html = '<div class="pasien-card-list">';
   filtered.forEach(function (p, idx) {
-    html += '<div class="pasien-item" data-idx="' + idx + '">' + renderAvatarInisial(p.nama, 'Belum Kemo') +
-      '<span style="flex:1; margin-left:10px;">' + escapeHtml(p.nama) +
-      (p.noRm ? ' <span style="color:var(--muted); font-size:12px;">&middot; RM ' + escapeHtml(p.noRm) + '</span>' : '') +
-      '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
+    html += '<div class="card card-pasien-row" data-idx="' + idx + '">' + renderAvatarInisial(p.nama, 'Belum Kemo') +
+      '<div class="nama-info"><div class="nama" style="margin-bottom:0;">' + escapeHtml(p.nama) + '</div>' +
+      (p.noRm ? ('<div class="sub-info">RM ' + escapeHtml(p.noRm) + '</div>') : '') + '</div>' +
+      '<i class="ti ti-chevron-right" aria-hidden="true" style="color:var(--muted); font-size:18px; flex-shrink:0;"></i></div>';
   });
   html += '</div>';
   container.innerHTML = html;
 
-  container.querySelectorAll('.pasien-item').forEach(function (el) {
+  container.querySelectorAll('.card-pasien-row').forEach(function (el) {
     el.addEventListener('click', function () {
       var idx = parseInt(this.getAttribute('data-idx'), 10);
       pilihPasienRiwayatPerawat(filtered[idx].nama);
