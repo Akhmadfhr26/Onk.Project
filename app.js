@@ -601,13 +601,12 @@ function renderJadwalTanggal(detail) {
       html += '<div class="obat-item obat-link-item"><span><i class="ti ti-link" aria-hidden="true"></i> ' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>';
     });
 
+    html += '<div style="display:flex; gap:6px; margin-top:8px; align-items:stretch;">';
     if (p.status === 'Tertunda') {
-      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaTanggal(' + i + ', false)', 'margin-top:8px;');
+      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaTanggal(' + i + ', false)', 'flex:1;');
     } else {
-      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaTanggal(' + i + ', true)', 'margin-top:8px;');
+      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaTanggal(' + i + ', true)', 'flex:1;');
     }
-
-    html += '<div style="display:flex; gap:6px; margin-top:6px; align-items:stretch;">';
     html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalForm(' + i + ')', 'flex:1;');
     html += renderIkonBtnBulat('ti-trash', 'hapusJadwalTanggal(' + i + ')', 'Hapus Jadwal');
     html += '</div>';
@@ -2139,13 +2138,12 @@ function renderJadwalTanggalPerawat(matches) {
       '</div></div>' + renderBadge(p.status) + '</div>';
     html += '<div class="obat-item"><span>Siklus ' + escapeHtml(p.siklus || '-') + '</span><span class="obat-jumlah">H' + p.hariKe + ' dari ' + p.lamaHari + '</span></div>';
 
+    html += '<div style="display:flex; gap:6px; margin-top:8px; align-items:stretch;">';
     if (p.status === 'Tertunda') {
-      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaPerawat(' + i + ', false)', 'margin-top:8px;');
+      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaPerawat(' + i + ', false)', 'flex:1;');
     } else {
-      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaPerawat(' + i + ', true)', 'margin-top:8px;');
+      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaPerawat(' + i + ', true)', 'flex:1;');
     }
-
-    html += '<div style="display:flex; gap:6px; margin-top:6px; align-items:stretch;">';
     html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalPerawat(' + i + ')', 'flex:1;');
     html += renderIkonBtnBulat('ti-trash', 'hapusJadwalPerawatDariKalender(' + i + ')', 'Hapus Jadwal');
     html += '</div>';
