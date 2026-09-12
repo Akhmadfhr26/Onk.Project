@@ -20,6 +20,18 @@
 //   jadwal pemakaian TERDEKAT (diurutkan dari yang paling dekat
 //   dengan hari ini, bukan sekadar "paling baru diinput") beserta
 //   total kebutuhannya, lalu riwayat pemakaian yang sudah lewat.
+//
+// PERUBAHAN TAMPILAN (markup-only, tidak ada logika/query yang berubah):
+// - Ditambahkan beberapa fungsi HELPER TAMPILAN di dekat escapeHtml():
+//   getInisial(), warnaStatus(), renderAvatarInisial(), renderIkonBtn(),
+//   renderProgressBarStok(). Semua murni menyusun string HTML.
+// - renderBadge() sekarang memakai warnaStatus() (perilaku sama persis).
+// - Kartu pasien (renderJadwalTanggal, renderTertunda,
+//   renderJadwalTanggalPerawat) sekarang pakai avatar inisial + border
+//   kiri berwarna status + tombol berikon. onclick, nama fungsi, dan
+//   parameter SEMUA tetap sama persis dengan sebelumnya.
+// - Bagian "Stok Obat Kritis" di dashboard dan "Kebutuhan Obat vs Stok"
+//   di tab Kebutuhan Obat sekarang pakai progress bar, bukan teks polos.
 // =====================================================================
 
 var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
@@ -83,6 +95,60 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// =====================================================================
+// HELPER TAMPILAN (murni menyusun string HTML — tidak ada query/logika
+// data di sini sama sekali). Ditambahkan supaya kartu-kartu pasien bisa
+// menampilkan avatar inisial, border status, tombol berikon, dan
+// progress bar stok tanpa mengubah alur data di fungsi-fungsi lain.
+// =====================================================================
+function warnaStatus(status) {
+  var warna = { 'Tertunda': '#E23B57', 'Sudah Kemo': '#1E9C6B', 'Hari Ini': '#0E9488', 'Belum Kemo': '#7C8CA0' };
+  return warna[status] || '#7C8CA0';
+}
+
+function getInisial(nama) {
+  var bersih = (nama || '').trim();
+  if (!bersih) return '?';
+  var parts = bersih.split(/\s+/);
+  var a = parts[0] ? parts[0].charAt(0) : '';
+  var b = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+  return (a + b).toUpperCase();
+}
+
+function renderAvatarInisial(nama, status) {
+  var w = warnaStatus(status);
+  return '<div class="avatar-inisial" style="background:' + w + '1F; color:' + w + '; border:1px solid ' + w + '40;">' +
+    escapeHtml(getInisial(nama)) + '</div>';
+}
+
+// Tombol aksi kecil dengan ikon Tabler di depan teksnya. `kelas` tetap
+// memakai class tombol yang sudah ada (btn-neutral/btn-accent/btn-danger/
+// btn-primary/btn-secondary) supaya semua styling & shadow ikut otomatis.
+function renderIkonBtn(icon, label, kelas, onclickAttr, styleTambahan) {
+  return '<button type="button" onclick="' + onclickAttr + '" class="' + kelas + '"' +
+    (styleTambahan ? (' style="' + styleTambahan + '"') : '') + '>' +
+    '<i class="ti ' + icon + '" aria-hidden="true"></i> ' + label + '</button>';
+}
+
+// Tombol hapus bulat kecil (ikon saja), dipakai menggantikan tombol
+// "Hapus Jadwal" lebar supaya sejalan dengan referensi desain.
+function renderIkonBtnBulat(icon, onclickAttr, judul) {
+  return '<button type="button" onclick="' + onclickAttr + '" class="btn-icon-circle" title="' + escapeHtml(judul || '') + '">' +
+    '<i class="ti ' + icon + '" aria-hidden="true"></i></button>';
+}
+
+// Progress bar stok vs kebutuhan. `stok` dan `butuh` angka non-negatif.
+function renderProgressBarStok(stok, butuh) {
+  var b = butuh > 0 ? butuh : 0;
+  var persen = b > 0 ? Math.max(0, Math.min(100, (stok / b) * 100)) : 100;
+  var kurang = stok < b;
+  var warna = kurang ? (persen < 40 ? 'var(--danger)' : '#F5A524') : 'var(--success)';
+  return '<div class="progress-row">' +
+    '<div class="progress-track"><div class="progress-fill" style="width:' + persen + '%; background:' + warna + ';"></div></div>' +
+    '<div class="progress-label">' + stok + ' / ' + b + '</div>' +
+    '</div>';
+}
+
 // ===== Status kemo (sama untuk farmasi & perawat) =====
 function hitungStatus(tanggalDate, keterangan) {
   var ket = (keterangan || '').toString().toLowerCase();
@@ -95,8 +161,7 @@ function hitungStatus(tanggalDate, keterangan) {
 }
 
 function renderBadge(status) {
-  var warna = { 'Tertunda': '#E23B57', 'Sudah Kemo': '#1E9C6B', 'Hari Ini': '#0E9488', 'Belum Kemo': '#7C8CA0' };
-  var w = warna[status] || '#7C8CA0';
+  var w = warnaStatus(status);
   return '<span class="status-badge" style="border:1px solid ' + w + '; background:' + w + '1F; color:' + w +
     '; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; font-family:var(--font-mono); white-space:nowrap;">' +
     '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:' + w + '; margin-right:5px;"></span>' +
@@ -525,21 +590,26 @@ function renderJadwalTanggal(detail) {
 
   var html = '<div class="ringkasan-jumlah">' + detail.pasienList.length + ' pasien terjadwal</div>';
   detail.pasienList.forEach(function (p, i) {
-    html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
-      '<span>' + escapeHtml(p.nama) + '</span>' + renderBadge(p.status) + '</div>';
+    var warnaBorder = warnaStatus(p.status);
+    html += '<div class="card" style="border-left:4px solid ' + warnaBorder + ';">';
+    html += '<div class="nama-row">' + renderAvatarInisial(p.nama, p.status) +
+      '<div class="nama-info"><div class="nama">' + escapeHtml(p.nama) + '</div>' +
+      '<div class="sub-info">Siklus ' + escapeHtml(p.siklus || '-') + '</div></div>' +
+      renderBadge(p.status) + '</div>';
+
     p.obatList.forEach(function (o) {
-      html += '<div class="obat-item"><span>' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>';
+      html += '<div class="obat-item obat-link-item"><span><i class="ti ti-link" aria-hidden="true"></i> ' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>';
     });
 
     if (p.status === 'Tertunda') {
-      html += '<button type="button" onclick="toggleTertundaTanggal(' + i + ', false)" class="btn-neutral" style="margin-top:8px;">Batalkan Tanda Tertunda</button>';
+      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaTanggal(' + i + ', false)', 'margin-top:8px;');
     } else {
-      html += '<button type="button" onclick="toggleTertundaTanggal(' + i + ', true)" class="btn-danger" style="margin-top:8px;">Tandai Tertunda</button>';
+      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaTanggal(' + i + ', true)', 'margin-top:8px;');
     }
 
-    html += '<div style="display:flex; gap:6px; margin-top:6px;">';
-    html += '<button type="button" onclick="toggleUbahTanggalForm(' + i + ')" class="btn-accent" style="flex:1;">Ubah Tanggal</button>';
-    html += '<button type="button" onclick="hapusJadwalTanggal(' + i + ')" style="flex:1; background:var(--danger); color:white; border:none; border-radius:16px; padding:8px 6px; font-size:12px;">Hapus Jadwal</button>';
+    html += '<div style="display:flex; gap:6px; margin-top:6px; align-items:stretch;">';
+    html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalForm(' + i + ')', 'flex:1;');
+    html += renderIkonBtnBulat('ti-trash', 'hapusJadwalTanggal(' + i + ')', 'Hapus Jadwal');
     html += '</div>';
 
     html += '<div id="ubahTanggalForm' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
@@ -739,12 +809,13 @@ function renderRentang(detail) {
   detail.items.forEach(function (item) {
     var kurang = item.selisih < 0;
     var warna = kurang ? 'var(--danger)' : 'var(--success)';
-    html += '<div class="total-item" style="align-items:center;">' +
-      '<span>' + escapeHtml(item.obat) + '</span>' +
-      '<span style="text-align:right;">Butuh ' + item.totalJumlah + ' &middot; Stok ' + item.stok +
-      ' &middot; <span style="color:' + warna + '; font-weight:700;">' +
+    html += '<div style="padding:8px 0; border-top:1px solid var(--border);">' +
+      '<div class="total-item" style="padding:0 0 6px;"><span>' + escapeHtml(item.obat) + '</span>' +
+      '<span style="color:' + warna + '; font-weight:700;">' +
       (kurang ? ('Kurang ' + Math.abs(item.selisih) + ' (pesan)') : ('Sisa +' + item.selisih)) +
-      '</span></span></div>';
+      '</span></div>' +
+      renderProgressBarStok(item.stok, item.totalJumlah) +
+      '</div>';
   });
   html += '</div><div style="margin-top:16px;">';
   detail.items.forEach(function (item) {
@@ -860,7 +931,8 @@ function renderDaftarPasienRiwayat(filter) {
 
   var html = '<div class="pasien-list-card">';
   filtered.forEach(function (nama, idx) {
-    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(nama) + '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
+    html += '<div class="pasien-item" data-idx="' + idx + '">' + renderAvatarInisial(nama, 'Belum Kemo') +
+      '<span style="flex:1; margin-left:10px;">' + escapeHtml(nama) + '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
   });
   html += '</div>';
   container.innerHTML = html;
@@ -933,8 +1005,8 @@ function renderRiwayat(nama, list) {
       '<div class="timeline-obat">' + escapeHtml(obatRingkas) + '</div>';
 
     html += '<div style="display:flex; gap:6px; margin-top:8px;">';
-    html += '<button type="button" onclick="toggleUbahTanggalRiwayat(' + i + ')" class="btn-accent" style="flex:1;">Ubah Tanggal</button>';
-    html += '<button type="button" onclick="hapusJadwalRiwayat(' + i + ')" class="btn-danger" style="flex:1;">Hapus Jadwal</button>';
+    html += renderIkonBtn('ti-pencil', 'Ubah Tanggal', 'btn-accent', 'toggleUbahTanggalRiwayat(' + i + ')', 'flex:1;');
+    html += renderIkonBtn('ti-trash', 'Hapus Jadwal', 'btn-danger', 'hapusJadwalRiwayat(' + i + ')', 'flex:1;');
     html += '</div>';
 
     html += '<div id="ubahTanggalRiwayat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
@@ -1161,15 +1233,19 @@ function renderTertunda(detail) {
   document.getElementById('ringkasanTertunda').innerHTML = detail.pasienList.length + ' pasien berstatus Tertunda';
   var html = '';
   detail.pasienList.forEach(function (p, i) {
-    html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
-      '<span>' + escapeHtml(p.nama) + '</span>' + renderBadge('Tertunda') + '</div>' +
-      '<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">Jadwal asal: ' + p.tanggalAsal + ' (Siklus ' + escapeHtml(p.siklus) + ')</div>';
-    p.obatList.forEach(function (o) { html += '<div class="obat-item"><span>' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>'; });
+    var warnaBorder = warnaStatus('Tertunda');
+    html += '<div class="card" style="border-left:4px solid ' + warnaBorder + ';">';
+    html += '<div class="nama-row">' + renderAvatarInisial(p.nama, 'Tertunda') +
+      '<div class="nama-info"><div class="nama">' + escapeHtml(p.nama) + '</div>' +
+      '<div class="sub-info">Siklus ' + escapeHtml(p.siklus) + ' &middot; Jadwal asal ' + p.tanggalAsal + '</div></div>' +
+      renderBadge('Tertunda') + '</div>';
 
-    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
-    html += '<button type="button" onclick="batalkanTundaTertunda(' + i + ')" class="btn-neutral" style="flex:1;">Batalkan Tunda</button>';
-    html += '<button type="button" onclick="toggleUbahTanggalTertunda(' + i + ')" class="btn-accent" style="flex:1;">Ubah Jadwal</button>';
-    html += '<button type="button" onclick="hapusJadwalTertunda(' + i + ')" class="btn-danger" style="flex:1;">Hapus Jadwal</button>';
+    p.obatList.forEach(function (o) { html += '<div class="obat-item obat-link-item"><span><i class="ti ti-link" aria-hidden="true"></i> ' + escapeHtml(o.obat) + '</span><span class="obat-jumlah">' + o.jumlah + '</span></div>'; });
+
+    html += '<div style="display:flex; gap:6px; margin-top:8px; align-items:stretch;">';
+    html += renderIkonBtn('ti-rotate', 'Batalkan Tunda', 'btn-neutral', 'batalkanTundaTertunda(' + i + ')', 'flex:1;');
+    html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalTertunda(' + i + ')', 'flex:1;');
+    html += renderIkonBtnBulat('ti-trash', 'hapusJadwalTertunda(' + i + ')', 'Hapus Jadwal');
     html += '</div>';
 
     html += '<div id="ubahTanggalTertunda' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
@@ -1426,10 +1502,10 @@ function renderDashboard(r) {
     html += '<div class="nama" style="font-size:14px;"><i class="ti ti-alert-triangle" aria-hidden="true" style="color:var(--danger); vertical-align:-2px;"></i> Stok Obat Kritis (' + r.stokKritis.length + ')</div>';
     html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Stok saat ini tidak cukup untuk kebutuhan 7 hari ke depan &mdash; segera pesan.</div>';
     r.stokKritis.forEach(function (item) {
-      html += '<div class="total-item" style="align-items:center;">' +
-        '<span>' + escapeHtml(item.obat) + '</span>' +
-        '<span style="text-align:right; color:var(--danger); font-weight:700;">Kurang ' + Math.abs(item.kurang) +
-        ' &middot; Butuh ' + item.butuh + ' &middot; Stok ' + item.stok + '</span></div>';
+      html += '<div style="padding:8px 0; border-top:1px solid var(--border);">' +
+        '<div class="total-item" style="padding:0 0 4px;"><span>' + escapeHtml(item.obat) + '</span></div>' +
+        renderProgressBarStok(item.stok, item.butuh) +
+        '</div>';
     });
     html += '</div>';
   } else {
@@ -1595,7 +1671,7 @@ function renderDaftarObatCariObat(filter) {
 
   var html = '<div class="pasien-list-card">';
   filtered.forEach(function (o, idx) {
-    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(o.obat) + '</span>' +
+    html += '<div class="pasien-item" data-idx="' + idx + '"><span><i class="ti ti-pill" aria-hidden="true" style="color:var(--accent); margin-right:6px;"></i>' + escapeHtml(o.obat) + '</span>' +
       '<span class="obat-jumlah" style="font-size:13px;">Stok ' + o.stok + '</span></div>';
   });
   html += '</div>';
@@ -2052,23 +2128,26 @@ function renderJadwalTanggalPerawat(matches) {
 
   var html = '<div class="ringkasan-jumlah">' + matches.length + ' pasien terjadwal</div>';
   matches.forEach(function (p, i) {
-    html += '<div class="card"><div class="nama" style="display:flex; justify-content:space-between; align-items:center;">' +
-      '<span>' + escapeHtml(p.nama) + '</span>' + renderBadge(p.status) + '</div>';
-    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:6px;">' +
-      (p.noRm ? ('No. RM ' + escapeHtml(p.noRm) + ' &middot; ') : '') +
+    var warnaBorder = warnaStatus(p.status);
+    html += '<div class="card" style="border-left:4px solid ' + warnaBorder + ';">';
+    html += '<div class="nama-row">' + renderAvatarInisial(p.nama, p.status) +
+      '<div class="nama-info"><div class="nama">' + escapeHtml(p.nama) + '</div>' +
+      '<div class="sub-info">' +
+      (p.noRm ? ('RM ' + escapeHtml(p.noRm) + ' &middot; ') : '') +
       (p.diagnosa ? (escapeHtml(p.diagnosa) + ' &middot; ') : '') +
-      (p.dpjp ? ('DPJP: ' + escapeHtml(p.dpjp)) : '') + '</div>';
+      (p.dpjp ? ('DPJP: ' + escapeHtml(p.dpjp)) : '') +
+      '</div></div>' + renderBadge(p.status) + '</div>';
     html += '<div class="obat-item"><span>Siklus ' + escapeHtml(p.siklus || '-') + '</span><span class="obat-jumlah">H' + p.hariKe + ' dari ' + p.lamaHari + '</span></div>';
 
     if (p.status === 'Tertunda') {
-      html += '<button type="button" onclick="toggleTertundaPerawat(' + i + ', false)" class="btn-neutral" style="margin-top:8px;">Batalkan Tanda Tertunda</button>';
+      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaPerawat(' + i + ', false)', 'margin-top:8px;');
     } else {
-      html += '<button type="button" onclick="toggleTertundaPerawat(' + i + ', true)" class="btn-danger" style="margin-top:8px;">Tandai Tertunda</button>';
+      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaPerawat(' + i + ', true)', 'margin-top:8px;');
     }
 
-    html += '<div style="display:flex; gap:6px; margin-top:6px;">';
-    html += '<button type="button" onclick="toggleUbahTanggalPerawat(' + i + ')" class="btn-accent" style="flex:1;">Ubah Jadwal</button>';
-    html += '<button type="button" onclick="hapusJadwalPerawatDariKalender(' + i + ')" style="flex:1; background:var(--danger); color:white; border:none; border-radius:16px; padding:8px 6px; font-size:12px;">Hapus Jadwal</button>';
+    html += '<div style="display:flex; gap:6px; margin-top:6px; align-items:stretch;">';
+    html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalPerawat(' + i + ')', 'flex:1;');
+    html += renderIkonBtnBulat('ti-trash', 'hapusJadwalPerawatDariKalender(' + i + ')', 'Hapus Jadwal');
     html += '</div>';
 
     html += '<div id="ubahTanggalPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
@@ -2232,7 +2311,8 @@ function renderDaftarPasienRiwayatPerawat(filter) {
 
   var html = '<div class="pasien-list-card">';
   filtered.forEach(function (p, idx) {
-    html += '<div class="pasien-item" data-idx="' + idx + '"><span>' + escapeHtml(p.nama) +
+    html += '<div class="pasien-item" data-idx="' + idx + '">' + renderAvatarInisial(p.nama, 'Belum Kemo') +
+      '<span style="flex:1; margin-left:10px;">' + escapeHtml(p.nama) +
       (p.noRm ? ' <span style="color:var(--muted); font-size:12px;">&middot; RM ' + escapeHtml(p.noRm) + '</span>' : '') +
       '</span><span style="color:var(--muted);">&rsaquo;</span></div>';
   });
@@ -2326,8 +2406,8 @@ function renderRiwayatPerawat(nama, list) {
       '<div class="timeline-siklus">Siklus ' + escapeHtml(item.siklus) + '</div>';
 
     html += '<div style="display:flex; gap:6px; margin-top:8px;">';
-    html += '<button type="button" onclick="toggleUbahTanggalRiwayatPerawat(' + i + ')" class="btn-accent" style="flex:1;">Ubah Jadwal</button>';
-    html += '<button type="button" onclick="hapusJadwalRiwayatPerawat(' + i + ')" class="btn-danger" style="flex:1;">Hapus Jadwal</button>';
+    html += renderIkonBtn('ti-pencil', 'Ubah Jadwal', 'btn-accent', 'toggleUbahTanggalRiwayatPerawat(' + i + ')', 'flex:1;');
+    html += renderIkonBtn('ti-trash', 'Hapus Jadwal', 'btn-danger', 'hapusJadwalRiwayatPerawat(' + i + ')', 'flex:1;');
     html += '</div>';
 
     html += '<div id="ubahTanggalRiwayatPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
