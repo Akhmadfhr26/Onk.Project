@@ -97,9 +97,11 @@
         <div class="kal-grid" id="kalHariLabelRow"></div>
         <div class="kal-grid" id="kalGrid" style="margin-top:4px;"></div>
         <div id="loadingKalender" class="loading-msg">Memuat...</div>
+        <div id="loadingKalenderSkeleton" class="skel-container" style="display:none;"></div>
 
         <div id="kalDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
         <div id="loadingKalDetail" class="loading-msg">Memuat jadwal...</div>
+        <div id="loadingKalDetailSkeleton" class="skel-container" style="display:none;"></div>
         <div id="kalDetailContainer"></div>
       </div>
 
@@ -149,6 +151,7 @@
         <button onclick="muatKebutuhanRentang()" class="btn-primary" style="margin-bottom:16px; max-width:260px;">Tampilkan Rekap</button>
 
         <div id="loadingRentang" class="loading-msg" style="display:none;">Memuat...</div>
+        <div id="loadingRentangSkeleton" class="skel-container" style="display:none;"></div>
         <div id="ringkasanRentang" class="ringkasan-jumlah"></div>
         <div id="contentRentang"></div>
       </div>
@@ -159,6 +162,7 @@
         <div id="riwayatListWrap">
           <input type="text" id="riwayatSearchInput" placeholder="Cari nama pasien..." autocomplete="off">
           <div id="loadingRiwayatList" class="loading-msg" style="display:none;">Memuat daftar pasien...</div>
+          <div id="loadingRiwayatListSkeleton" class="skel-container" style="display:none;"></div>
           <div id="daftarPasienRiwayat"></div>
         </div>
 
@@ -166,6 +170,7 @@
           <button type="button" class="btn-secondary" onclick="kembaliKeDaftarPasien()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
           <div id="riwayatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
           <div id="loadingRiwayat" class="loading-msg" style="display:none;">Memuat riwayat...</div>
+          <div id="loadingRiwayatSkeleton" class="skel-container" style="display:none;"></div>
           <div class="ringkasan-jumlah" id="ringkasanRiwayat"></div>
           <div id="contentRiwayat"></div>
 
@@ -202,6 +207,7 @@
       <!-- ===== TAB 4: TERTUNDA (FARMASI) ===== -->
       <div id="tabTertunda" style="display:none">
         <div id="loadingTertunda" class="loading-msg">Memuat...</div>
+        <div id="loadingTertundaSkeleton" class="skel-container" style="display:none;"></div>
         <div class="ringkasan-jumlah" id="ringkasanTertunda"></div>
         <div id="contentTertunda"></div>
       </div>
@@ -209,6 +215,7 @@
       <!-- ===== TAB 5: DASHBOARD (FARMASI) ===== -->
       <div id="tabDashboard" style="display:none">
         <div id="loadingDashboard" class="loading-msg">Memuat...</div>
+        <div id="loadingDashboardSkeleton" class="skel-container" style="display:none;"></div>
         <div id="contentDashboard"></div>
       </div>
 
@@ -224,6 +231,7 @@
         <div id="cariObatListWrap">
           <input type="text" id="obatSearchInput" placeholder="Cari nama obat..." autocomplete="off">
           <div id="loadingCariObatList" class="loading-msg" style="display:none;">Memuat daftar obat...</div>
+          <div id="loadingCariObatListSkeleton" class="skel-container" style="display:none;"></div>
           <div id="daftarObatCariObat"></div>
         </div>
 
@@ -231,6 +239,7 @@
           <button type="button" class="btn-secondary" onclick="kembaliKeDaftarObat()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
           <div id="cariObatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
           <div id="loadingCariObat" class="loading-msg" style="display:none;">Memuat detail...</div>
+          <div id="loadingCariObatSkeleton" class="skel-container" style="display:none;"></div>
           <div class="ringkasan-jumlah" id="ringkasanCariObat"></div>
           <div id="contentCariObat"></div>
         </div>
@@ -290,9 +299,11 @@
         <div class="kal-grid" id="kalPerawatHariLabelRow"></div>
         <div class="kal-grid" id="kalPerawatGrid" style="margin-top:4px;"></div>
         <div id="loadingKalenderPerawat" class="loading-msg">Memuat...</div>
+        <div id="loadingKalenderPerawatSkeleton" class="skel-container" style="display:none;"></div>
 
         <div id="kalPerawatDetailLabel" style="font-weight:bold; font-size:15px; text-align:center; margin-top:20px;"></div>
         <div id="loadingKalPerawatDetail" class="loading-msg">Memuat jadwal...</div>
+        <div id="loadingKalPerawatDetailSkeleton" class="skel-container" style="display:none;"></div>
         <div id="kalPerawatDetailContainer"></div>
       </div>
 
@@ -302,6 +313,7 @@
         <div id="riwayatPerawatListWrap">
           <input type="text" id="riwayatPerawatSearchInput" placeholder="Cari nama pasien atau No. RM..." autocomplete="off">
           <div id="loadingRiwayatPerawatList" class="loading-msg" style="display:none;">Memuat daftar pasien...</div>
+          <div id="loadingRiwayatPerawatListSkeleton" class="skel-container" style="display:none;"></div>
           <div id="daftarPasienRiwayatPerawat"></div>
         </div>
 
@@ -309,6 +321,7 @@
           <button type="button" class="btn-secondary" onclick="kembaliKeDaftarPasienPerawat()" style="margin-bottom:14px;">‹ Kembali ke Daftar</button>
           <div id="riwayatPerawatDetailNama" style="font-size:18px; font-weight:700; margin-bottom:6px;"></div>
           <div id="loadingRiwayatPerawat" class="loading-msg" style="display:none;">Memuat riwayat...</div>
+          <div id="loadingRiwayatPerawatSkeleton" class="skel-container" style="display:none;"></div>
           <div class="ringkasan-jumlah" id="ringkasanRiwayatPerawat"></div>
           <div id="contentRiwayatPerawat"></div>
 
