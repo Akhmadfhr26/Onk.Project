@@ -5,6 +5,11 @@
 // Kebutuhan Obat, Daftar Pasien, Pasien Tertunda, Dashboard, Cari Obat,
 // Daftarkan Pasien) beserta event listener terkait.
 // Murni pindah lokasi — tidak ada logika/query yang berubah.
+//
+// UPDATE: ditambahkan fitur "Input Pemakaian Obat" (mengurangi stok)
+// pada TAB 2: Kebutuhan Obat — lihat state currentPemakaianRows dan
+// fungsi tambahBarisPemakaianKosong / hapusBarisPemakaian /
+// renderPemakaianRowsTable / submitPemakaianObat di bawah.
 // =====================================================================
 
 // ---- state (depo/farmasi) ----
@@ -21,6 +26,7 @@ var modeGrafikPasienAktif = 'bulan';
 var currentObatList = [];
 var pasienListTerakhirTertunda = [];
 var currentStokRows = [];
+var currentPemakaianRows = [];
 
 // ---- state khusus tab Cari Obat (farmasi) ----
 var obatAllListCariObat = [];
@@ -579,6 +585,107 @@ function submitUpdateStok() {
     if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
   }).catch(function (err) {
     document.getElementById('stokMasukSubmitBtn').disabled = false;
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Gagal: ' + err.message;
+  });
+}
+
+// =====================================================================
+// TAMBAHAN: INPUT PEMAKAIAN OBAT (mengurangi stok) — TAB 2: KEBUTUHAN OBAT
+// =====================================================================
+function tambahBarisPemakaianKosong() {
+  currentPemakaianRows.push({ obat: '', jumlah: '' });
+  renderPemakaianRowsTable();
+}
+
+function hapusBarisPemakaian(i) {
+  currentPemakaianRows.splice(i, 1);
+  renderPemakaianRowsTable();
+}
+
+function renderPemakaianRowsTable() {
+  var container = document.getElementById('pemakaianRowsContainer');
+  if (!container) return;
+  var html = '';
+  currentPemakaianRows.forEach(function (item, i) {
+    html += '<div class="obat-row">' +
+      '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
+      '<input type="number" min="0" data-i="' + i + '" data-f="jumlah" placeholder="Jumlah dipakai" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
+      '<button type="button" onclick="hapusBarisPemakaian(' + i + ')">×</button></div>';
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.obat-row input').forEach(function (inp) {
+    var handler = function () {
+      var i = parseInt(this.getAttribute('data-i'), 10);
+      var f = this.getAttribute('data-f');
+      currentPemakaianRows[i][f] = this.value;
+    };
+    inp.addEventListener('input', handler);
+    inp.addEventListener('change', handler);
+  });
+}
+
+function submitPemakaianObat() {
+  var statusEl = document.getElementById('pemakaianStatus');
+  statusEl.className = 'status-msg';
+  statusEl.textContent = '';
+
+  var valid = currentPemakaianRows.filter(function (r) {
+    return (r.obat || '').trim() !== '' && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) > 0;
+  });
+  if (valid.length === 0) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Isi minimal satu baris (obat, jumlah pemakaian) dengan benar.';
+    return;
+  }
+
+  document.getElementById('pemakaianSubmitBtn').disabled = true;
+  statusEl.textContent = 'Memeriksa stok...';
+
+  var dibatalkan = false;
+
+  sb.from('stock_entries').select('obat, jumlah').then(function (stokRes) {
+    if (stokRes.error) throw stokRes.error;
+    var stokMap = {};
+    (stokRes.data || []).forEach(function (row) {
+      var key = (row.obat || '').toLowerCase();
+      stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+    });
+
+    var kurang = [];
+    valid.forEach(function (r) {
+      var stokSaatIni = stokMap[r.obat.trim().toLowerCase()] || 0;
+      if (Number(r.jumlah) > stokSaatIni) {
+        kurang.push(r.obat.trim() + ' (stok ' + stokSaatIni + ', dipakai ' + r.jumlah + ')');
+      }
+    });
+
+    if (kurang.length > 0) {
+      var lanjut = window.confirm('Stok tidak cukup untuk: ' + kurang.join(', ') + '.\n\nJika dilanjutkan, stok obat tersebut akan menjadi minus. Tetap lanjutkan?');
+      if (!lanjut) {
+        dibatalkan = true;
+        return null;
+      }
+    }
+
+    var rows = valid.map(function (r) {
+      return { obat: r.obat.trim(), tanggal: toIsoDate(new Date()), jumlah: -Math.abs(Number(r.jumlah)) };
+    });
+    statusEl.textContent = 'Menyimpan pemakaian...';
+    return sb.from('stock_entries').insert(rows);
+  }).then(function (res) {
+    document.getElementById('pemakaianSubmitBtn').disabled = false;
+    if (dibatalkan) { statusEl.textContent = ''; return; }
+    if (res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
+    statusEl.className = 'status-msg ok';
+    statusEl.textContent = 'Pemakaian berhasil dicatat, stok terupdate.';
+    currentPemakaianRows = [{ obat: '', jumlah: '' }];
+    renderPemakaianRowsTable();
+    invalidateCacheAndReload();
+    isiDatalistObat('daftarObatDatalistTambah');
+    if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
+  }).catch(function (err) {
+    document.getElementById('pemakaianSubmitBtn').disabled = false;
     statusEl.className = 'status-msg error';
     statusEl.textContent = 'Gagal: ' + err.message;
   });
