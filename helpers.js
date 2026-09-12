@@ -91,3 +91,160 @@ function renderBadge(status) {
     '<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:' + w + '; margin-right:5px;"></span>' +
     status + '</span>';
 }
+
+// =====================================================================
+// SKELETON LOADER — helper baru, tidak mengubah fungsi/logika yang ada.
+//
+// Cara pakai: setiap ID loading lama (mis. "loadingKalender") sekarang
+// punya pasangan sibling div baru di HTML dengan id + "Skeleton"
+// (mis. "loadingKalenderSkeleton"), lihat index.html.
+//
+// setLoading(id, show, skeletonTipe)
+//   - setLoading(id, true)            -> perilaku SAMA seperti dulu:
+//         document.getElementById(id).style.display = 'block';
+//         dipakai untuk status aksi cepat (mis. "Menghapus...",
+//         "Menyimpan perubahan...") yang teksnya sudah diatur terpisah
+//         lewat innerText di kode lain (TIDAK disentuh sama sekali).
+//   - setLoading(id, true, 'tipe')    -> menyembunyikan div teks lama,
+//         menampilkan skeleton (id+"Skeleton") sesuai 'tipe', dipakai
+//         untuk fetch data awal (buka tab / ganti bulan / ganti pasien).
+//   - setLoading(id, false)           -> menyembunyikan KEDUANYA
+//         (div teks lama & skeleton, kalau skeleton-nya ada).
+// =====================================================================
+
+// ---- Generator bentuk 1: LIST (avatar + garis) ----
+function skeletonBarisList(jumlah) {
+  var n = jumlah || 5;
+  var html = '<div class="skel-list">';
+  for (var i = 0; i < n; i++) {
+    html += '<div class="skel-row">' +
+      '<div class="skel-avatar skeleton-shimmer"></div>' +
+      '<div class="skel-row-lines">' +
+        '<div class="skel-line skeleton-shimmer" style="width:' + (55 + (i % 3) * 10) + '%;"></div>' +
+        '<div class="skel-line skel-line-sm skeleton-shimmer" style="width:' + (30 + (i % 4) * 8) + '%;"></div>' +
+      '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ---- Generator bentuk 2: KALENDER (grid bulan) ----
+function skeletonKalender() {
+  var html = '<div class="skel-cal-grid">';
+  for (var i = 0; i < 35; i++) html += '<div class="skel-cal-cell skeleton-shimmer"></div>';
+  html += '</div>';
+  return html;
+}
+
+// ---- Generator bentuk 3: RIWAYAT (kartu timeline) ----
+function skeletonRiwayat(jumlah) {
+  var n = jumlah || 3;
+  var html = '<div class="skel-list">';
+  for (var i = 0; i < n; i++) {
+    html += '<div class="skel-card">' +
+      '<div class="skel-line skeleton-shimmer" style="width:35%; height:12px; margin-bottom:10px;"></div>' +
+      '<div class="skel-line skeleton-shimmer" style="width:70%; margin-bottom:6px;"></div>' +
+      '<div class="skel-line skel-line-sm skeleton-shimmer" style="width:50%;"></div>' +
+    '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ---- Generator bentuk 4: KARTU (border kiri + avatar + tombol) ----
+function skeletonKartu(jumlah) {
+  var n = jumlah || 2;
+  var html = '<div class="skel-list">';
+  for (var i = 0; i < n; i++) {
+    html += '<div class="skel-card skel-card-border">' +
+      '<div class="skel-row" style="border:none; padding:0; margin-bottom:10px;">' +
+        '<div class="skel-avatar skeleton-shimmer"></div>' +
+        '<div class="skel-row-lines">' +
+          '<div class="skel-line skeleton-shimmer" style="width:60%;"></div>' +
+          '<div class="skel-line skel-line-sm skeleton-shimmer" style="width:40%;"></div>' +
+        '</div></div>' +
+      '<div class="skel-line skeleton-shimmer" style="width:90%; margin-bottom:12px;"></div>' +
+      '<div class="skel-btn-row">' +
+        '<div class="skel-btn skeleton-shimmer"></div>' +
+        '<div class="skel-btn skeleton-shimmer"></div>' +
+      '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ---- Generator bentuk 5: TABEL (nama obat + progress bar) ----
+function skeletonTabel(jumlah) {
+  var n = jumlah || 4;
+  var html = '<div class="skel-list">';
+  for (var i = 0; i < n; i++) {
+    html += '<div class="skel-tabel-row">' +
+      '<div class="skel-line skeleton-shimmer"></div>' +
+      '<div class="skel-progress skeleton-shimmer"></div>' +
+    '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// ---- Generator bentuk 6: DASHBOARD (kotak statistik + kartu) ----
+function skeletonDashboard() {
+  var html = '<div class="skel-dash-stats">';
+  for (var i = 0; i < 3; i++) html += '<div class="skel-dash-stat skeleton-shimmer"></div>';
+  html += '</div>';
+  html += '<div class="skel-card" style="margin-top:12px;">' +
+    '<div class="skel-line skeleton-shimmer" style="width:45%; margin-bottom:10px;"></div>' +
+    '<div class="skel-line skel-line-sm skeleton-shimmer" style="width:80%;"></div>' +
+  '</div>';
+  return html;
+}
+
+// ---- Generator bentuk 7: GRAFIK (batang chart) ----
+function skeletonGrafik() {
+  var tinggi = [40, 65, 50, 80, 55, 70, 45, 60];
+  var html = '<div class="skel-grafik">';
+  tinggi.forEach(function (h) {
+    html += '<div class="skel-bar skeleton-shimmer" style="height:' + h + '%;"></div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+// Peta nama tipe -> generator, dipakai internal oleh setLoading()
+var SKELETON_GENERATORS = {
+  'list': function () { return skeletonBarisList(5); },
+  'kalender': skeletonKalender,
+  'riwayat': function () { return skeletonRiwayat(3); },
+  'kartu': function () { return skeletonKartu(2); },
+  'tabel': function () { return skeletonTabel(4); },
+  'dashboard': skeletonDashboard,
+  'grafik': skeletonGrafik
+};
+
+function setLoading(id, show, skeletonTipe) {
+  var el = document.getElementById(id);
+  var skelEl = document.getElementById(id + 'Skeleton');
+
+  if (show && skeletonTipe) {
+    // Mode skeleton: sembunyikan div teks lama, tampilkan skeleton.
+    if (el) el.style.display = 'none';
+    if (skelEl) {
+      var generator = SKELETON_GENERATORS[skeletonTipe];
+      skelEl.innerHTML = generator ? generator() : '';
+      skelEl.style.display = 'block';
+    }
+    return;
+  }
+
+  if (show) {
+    // Mode teks biasa (aksi cepat: hapus/simpan/tandai) — sama seperti
+    // perilaku asli sebelum ada skeleton.
+    if (el) el.style.display = 'block';
+    if (skelEl) skelEl.style.display = 'none';
+    return;
+  }
+
+  // show === false -> sembunyikan keduanya
+  if (el) el.style.display = 'none';
+  if (skelEl) skelEl.style.display = 'none';
+}
