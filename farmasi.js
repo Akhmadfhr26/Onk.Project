@@ -516,7 +516,7 @@ function renderRentang(detail) {
 }
 
 function tambahBarisStokKosong() {
-  currentStokRows.push({ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' });
+  currentStokRows.push({ obat: '', jumlah: '' });
   renderStokRowsTable();
 }
 function hapusBarisStok(i) {
@@ -530,7 +530,6 @@ function renderStokRowsTable() {
   currentStokRows.forEach(function (item, i) {
     html += '<div class="obat-row">' +
       '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
-      '<input type="date" data-i="' + i + '" data-f="tanggal" style="flex:1;" value="' + escapeHtml(item.tanggal || '') + '">' +
       '<input type="number" data-i="' + i + '" data-f="jumlah" placeholder="Stok saat ini" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
       '<button type="button" onclick="hapusBarisStok(' + i + ')">×</button></div>';
   });
@@ -552,16 +551,18 @@ function submitUpdateStok() {
   statusEl.textContent = '';
 
   var valid = currentStokRows.filter(function (r) {
-    return (r.obat || '').trim() !== '' && r.tanggal && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) >= 0;
+    return (r.obat || '').trim() !== '' && r.jumlah !== '' && !isNaN(Number(r.jumlah)) && Number(r.jumlah) >= 0;
   });
   if (valid.length === 0) {
     statusEl.className = 'status-msg error';
-    statusEl.textContent = 'Isi minimal satu baris (obat, tanggal, jumlah stok saat ini) dengan benar.';
+    statusEl.textContent = 'Isi minimal satu baris (obat, jumlah stok saat ini) dengan benar.';
     return;
   }
 
   document.getElementById('stokMasukSubmitBtn').disabled = true;
   statusEl.textContent = 'Menyimpan...';
+
+  var tanggalOtomatis = toIsoDate(new Date());
 
   var deletePromises = valid.map(function (r) {
     return sb.from('stock_entries').delete().ilike('obat', r.obat.trim());
@@ -571,14 +572,14 @@ function submitUpdateStok() {
     var failedDelete = delResults.find(function (r) { return r.error; });
     if (failedDelete) throw failedDelete.error;
 
-    var rows = valid.map(function (r) { return { obat: r.obat.trim(), tanggal: r.tanggal, jumlah: Number(r.jumlah) }; });
+    var rows = valid.map(function (r) { return { obat: r.obat.trim(), tanggal: tanggalOtomatis, jumlah: Number(r.jumlah) }; });
     return sb.from('stock_entries').insert(rows);
   }).then(function (res) {
     document.getElementById('stokMasukSubmitBtn').disabled = false;
     if (res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
     statusEl.className = 'status-msg ok';
     statusEl.textContent = 'Stok berhasil diupdate.';
-    currentStokRows = [{ obat: '', tanggal: toIsoDate(new Date()), jumlah: '' }];
+    currentStokRows = [{ obat: '', jumlah: '' }];
     renderStokRowsTable();
     invalidateCacheAndReload();
     isiDatalistObat('daftarObatDatalistTambah');
