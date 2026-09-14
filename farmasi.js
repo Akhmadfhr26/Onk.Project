@@ -10,6 +10,12 @@
 // pada TAB 2: Kebutuhan Obat — lihat state currentPemakaianRows dan
 // fungsi tambahBarisPemakaianKosong / hapusBarisPemakaian /
 // renderPemakaianRowsTable / submitPemakaianObat di bawah.
+//
+// FIX: submitPemakaianObat() diperbaiki supaya tidak lagi menyisipkan
+// baris stock_entries dengan jumlah minus (yang melanggar check
+// constraint "stock_entries_jumlah_check"). Sekarang fungsi ini
+// menghitung stok baru, lalu mengganti seluruh baris lama obat
+// tersebut dengan satu baris berisi total stok terbaru (>= 0).
 // =====================================================================
 
 // ---- state (depo/farmasi) ----
@@ -648,36 +654,59 @@ function submitPemakaianObat() {
   sb.from('stock_entries').select('obat, jumlah').then(function (stokRes) {
     if (stokRes.error) throw stokRes.error;
     var stokMap = {};
+    var namaAsliMap = {};
     (stokRes.data || []).forEach(function (row) {
       var key = (row.obat || '').toLowerCase();
       stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+      if (!namaAsliMap[key]) namaAsliMap[key] = row.obat;
     });
 
     var kurang = [];
+    var updates = []; // { obat, key, stokBaru, namaAsli }
     valid.forEach(function (r) {
-      var stokSaatIni = stokMap[r.obat.trim().toLowerCase()] || 0;
-      if (Number(r.jumlah) > stokSaatIni) {
+      var key = r.obat.trim().toLowerCase();
+      var stokSaatIni = stokMap[key] || 0;
+      var stokBaru = stokSaatIni - Number(r.jumlah);
+      if (stokBaru < 0) {
         kurang.push(r.obat.trim() + ' (stok ' + stokSaatIni + ', dipakai ' + r.jumlah + ')');
       }
+      updates.push({ obat: r.obat.trim(), key: key, stokBaru: stokBaru, namaAsli: namaAsliMap[key] || r.obat.trim() });
     });
 
     if (kurang.length > 0) {
-      var lanjut = window.confirm('Stok tidak cukup untuk: ' + kurang.join(', ') + '.\n\nJika dilanjutkan, stok obat tersebut akan menjadi minus. Tetap lanjutkan?');
+      var lanjut = window.confirm(
+        'Stok tidak cukup untuk: ' + kurang.join(', ') + '.\n\n' +
+        'Database tidak mengizinkan stok minus, jadi kalau dilanjutkan, stok obat tersebut akan diset menjadi 0 (bukan minus). Tetap lanjutkan?'
+      );
       if (!lanjut) {
         dibatalkan = true;
         return null;
       }
     }
 
-    var rows = valid.map(function (r) {
-      return { obat: r.obat.trim(), tanggal: toIsoDate(new Date()), jumlah: -Math.abs(Number(r.jumlah)) };
-    });
     statusEl.textContent = 'Menyimpan pemakaian...';
-    return sb.from('stock_entries').insert(rows);
+
+    // Hapus dulu semua entri stok lama utk obat-obat yang diupdate,
+    // lalu insert satu baris baru berisi TOTAL stok terbaru (selalu >= 0),
+    // supaya tidak melanggar check constraint stock_entries_jumlah_check.
+    var deletePromises = updates.map(function (u) {
+      return sb.from('stock_entries').delete().ilike('obat', u.obat);
+    });
+
+    return Promise.all(deletePromises).then(function (delResults) {
+      var failedDelete = delResults.find(function (r) { return r.error; });
+      if (failedDelete) throw failedDelete.error;
+
+      var tanggalOtomatis = toIsoDate(new Date());
+      var rows = updates.map(function (u) {
+        return { obat: u.namaAsli, tanggal: tanggalOtomatis, jumlah: Math.max(0, u.stokBaru) };
+      });
+      return sb.from('stock_entries').insert(rows);
+    });
   }).then(function (res) {
     document.getElementById('pemakaianSubmitBtn').disabled = false;
     if (dibatalkan) { statusEl.textContent = ''; return; }
-    if (res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
+    if (res && res.error) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Gagal: ' + res.error.message; return; }
     statusEl.className = 'status-msg ok';
     statusEl.textContent = 'Pemakaian berhasil dicatat, stok terupdate.';
     currentPemakaianRows = [{ obat: '', jumlah: '' }];
