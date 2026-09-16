@@ -1198,6 +1198,15 @@ function hapusJadwalTertunda(i) {
 // + patients.interval_hari. TIDAK bergantung pada view v_patient_summary,
 // sehingga independen dari logika "Berpotensi Belum Follow-up" yang sudah
 // ada sebelumnya (yang mendeteksi kasus yang SUDAH lewat/terlambat).
+//
+// Ada 2 kategori pasien yang masuk daftar ini:
+// 1) Punya interval_hari, dan perkiraan jadwal berikutnya (tanggal terakhir
+//    + interval) jatuh dalam 30 hari ke depan, tapi belum ada jadwal baru.
+// 2) Total jadwalnya HANYA SATU KALI SAJA (belum pernah dijadwalkan lagi
+//    sama sekali sejak kemo pertama & satu-satunya), jadwal itu sudah
+//    lewat, dan tidak ada jadwal lain dalam 30 hari ke depan. Kategori ini
+//    tetap dimasukkan walau interval_hari belum diisi, karena justru
+//    itulah kasus yang paling rawan "terlewat" tanpa follow-up.
 // ---------------------------------------------------------------------
 function cariPasienPerluDijadwalkan30Hari() {
   return Promise.all([
@@ -1211,43 +1220,69 @@ function cariPasienPerluDijadwalkan30Hari() {
     var hariIni = dateOnly(new Date());
     var batasAkhir = new Date(hariIni.getTime() + 30 * 86400000);
 
-    // jadwal terakhir per pasien (berdasarkan patient_id)
+    // jadwal terakhir + jumlah total jadwal per pasien (berdasarkan patient_id)
     var terakhirPerPasien = {};
+    var jumlahJadwalPerPasien = {};
     list.forEach(function (s) {
       var key = s.patient_id;
+      jumlahJadwalPerPasien[key] = (jumlahJadwalPerPasien[key] || 0) + 1;
       if (!terakhirPerPasien[key] || s.dateObj.getTime() > terakhirPerPasien[key].dateObj.getTime()) {
         terakhirPerPasien[key] = s;
       }
     });
 
     var hasil = [];
+    var sudahMasuk = {}; // supaya tidak dobel antara kategori 1 & 2
+
     (patientsRes.data || []).forEach(function (p) {
-      if (!p.interval_hari) return; // tanpa interval, tidak bisa diperkirakan
       var last = terakhirPerPasien[p.id];
       if (!last) return; // belum pernah kemo sama sekali, di luar cakupan fitur ini
 
-      var perkiraan = new Date(last.dateObj.getTime() + p.interval_hari * 86400000);
-      var perkiraanD = dateOnly(perkiraan);
-
-      // sudah ada jadwal baru setelah jadwal terakhir? kalau ada, berarti
-      // pasien sudah dijadwalkan ulang, jadi tidak perlu masuk daftar ini.
       var sudahAdaJadwalBaru = list.some(function (s) {
         return s.patient_id === p.id && s.dateObj.getTime() > last.dateObj.getTime();
       });
-      if (sudahAdaJadwalBaru) return;
+      if (sudahAdaJadwalBaru) return; // sudah dijadwalkan ulang
 
-      if (perkiraanD.getTime() >= hariIni.getTime() && perkiraanD.getTime() <= batasAkhir.getTime()) {
-        var sisaHari = Math.round((perkiraanD.getTime() - hariIni.getTime()) / 86400000);
+      // ----- Kategori 1: berdasarkan interval_hari -----
+      if (p.interval_hari) {
+        var perkiraan = new Date(last.dateObj.getTime() + p.interval_hari * 86400000);
+        var perkiraanD = dateOnly(perkiraan);
+        if (perkiraanD.getTime() >= hariIni.getTime() && perkiraanD.getTime() <= batasAkhir.getTime()) {
+          var sisaHari = Math.round((perkiraanD.getTime() - hariIni.getTime()) / 86400000);
+          hasil.push({
+            nama: p.nama,
+            patientId: p.id,
+            tanggalTerakhir: last.tanggal,
+            perkiraanBerikutnya: formatDDMMYYYY(perkiraanD),
+            sisaHari: sisaHari,
+            catatan: null
+          });
+          sudahMasuk[p.id] = true;
+        }
+      }
+
+      // ----- Kategori 2: total jadwal cuma 1x, sudah lewat, tanpa follow-up -----
+      if (!sudahMasuk[p.id] && jumlahJadwalPerPasien[p.id] === 1 && dateOnly(last.dateObj).getTime() < hariIni.getTime()) {
         hasil.push({
           nama: p.nama,
+          patientId: p.id,
           tanggalTerakhir: last.tanggal,
-          perkiraanBerikutnya: formatDDMMYYYY(perkiraanD),
-          sisaHari: sisaHari
+          perkiraanBerikutnya: '-',
+          sisaHari: null,
+          catatan: 'Baru 1x kemo tercatat, belum ada jadwal lanjutan'
         });
+        sudahMasuk[p.id] = true;
       }
     });
 
-    hasil.sort(function (a, b) { return a.sisaHari - b.sisaHari; }); // paling dekat tanggalnya di atas
+    // urutkan: yang punya sisaHari (kategori 1) naik dulu (paling dekat di atas),
+    // lalu kategori 2 (tanpa perkiraan) di bagian bawah.
+    hasil.sort(function (a, b) {
+      if (a.sisaHari == null && b.sisaHari == null) return 0;
+      if (a.sisaHari == null) return 1;
+      if (b.sisaHari == null) return -1;
+      return a.sisaHari - b.sisaHari;
+    });
     return hasil;
   });
 }
@@ -1418,12 +1453,18 @@ function renderDashboard(r) {
   if (r.perluDijadwalkan30Hari && r.perluDijadwalkan30Hari.length > 0) {
     html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--warning, var(--accent));">';
     html += '<div class="nama" style="font-size:14px;"><i class="ti ti-calendar-due" aria-hidden="true" style="color:var(--warning, var(--accent)); vertical-align:-2px;"></i> Perlu Dijadwalkan Ulang &ndash; 30 Hari ke Depan (' + r.perluDijadwalkan30Hari.length + ')</div>';
-    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Perkiraan jadwal berikutnya jatuh dalam 30 hari ke depan, tapi belum ada jadwal baru.</div>';
-    r.perluDijadwalkan30Hari.forEach(function (p) {
-      html += '<div style="padding:8px 0; border-top:1px solid var(--border);">' +
-        '<div class="total-item" style="padding:0;"><span>' + escapeHtml(p.nama) + '</span>' +
-        '<span style="color:var(--warning, var(--accent)); font-weight:700;">' + p.sisaHari + ' hari lagi</span></div>' +
-        '<div style="font-size:11px; color:var(--muted); margin-top:2px;">Kemo terakhir: ' + p.tanggalTerakhir + ' &middot; Perkiraan berikutnya: ' + p.perkiraanBerikutnya + '</div>' +
+    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Perkiraan jadwal berikutnya jatuh dalam 30 hari ke depan (atau baru 1x kemo & belum ada jadwal lanjutan), tapi belum ada jadwal baru. Klik nama pasien untuk membuka detailnya.</div>';
+    r.perluDijadwalkan30Hari.forEach(function (p, i) {
+      var kananHtml = (p.sisaHari != null)
+        ? ('<span style="color:var(--warning, var(--accent)); font-weight:700;">' + p.sisaHari + ' hari lagi</span>')
+        : ('<span style="color:var(--warning, var(--accent)); font-weight:700; font-size:11px;">Belum ada perkiraan</span>');
+      var subInfo = p.catatan
+        ? ('Kemo (satu-satunya): ' + p.tanggalTerakhir + ' &middot; ' + escapeHtml(p.catatan))
+        : ('Kemo terakhir: ' + p.tanggalTerakhir + ' &middot; Perkiraan berikutnya: ' + p.perkiraanBerikutnya);
+      html += '<div class="dash-pasien-link" data-idx="' + i + '" style="padding:8px 0; border-top:1px solid var(--border); cursor:pointer;">' +
+        '<div class="total-item" style="padding:0;"><span style="color:var(--accent-dim); text-decoration:underline;">' + escapeHtml(p.nama) + '</span>' +
+        kananHtml + '</div>' +
+        '<div style="font-size:11px; color:var(--muted); margin-top:2px;">' + subInfo + '</div>' +
         '</div>';
     });
     html += '</div>';
@@ -1450,6 +1491,26 @@ function renderDashboard(r) {
 
   document.getElementById('contentDashboard').innerHTML = html;
   setActiveGrafikButton();
+
+  // pasang klik untuk baris "Perlu Dijadwalkan Ulang" -> buka Daftar Pasien
+  document.querySelectorAll('#contentDashboard .dash-pasien-link').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var idx = parseInt(this.getAttribute('data-idx'), 10);
+      var p = r.perluDijadwalkan30Hari[idx];
+      if (p) bukaPasienDariDashboard(p.nama);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------
+// TAMBAHAN: navigasi dari Dashboard -> tab "Daftar Pasien" -> langsung
+// buka detail riwayat pasien yang bersangkutan.
+// ---------------------------------------------------------------------
+function bukaPasienDariDashboard(nama) {
+  if (typeof switchTab === 'function') switchTab('riwayat');
+  // beri jeda singkat supaya elemen tab Daftar Pasien sudah tampil
+  // sebelum kita paksa masuk ke tampilan detail.
+  setTimeout(function () { pilihPasienRiwayat(nama); }, 50);
 }
 
 function setActiveGrafikButton() {
