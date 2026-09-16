@@ -16,6 +16,13 @@
 // constraint "stock_entries_jumlah_check"). Sekarang fungsi ini
 // menghitung stok baru, lalu mengganti seluruh baris lama obat
 // tersebut dengan satu baris berisi total stok terbaru (>= 0).
+//
+// UPDATE 2: ditambahkan deteksi "Perlu Dijadwalkan Ulang (30 Hari ke
+// Depan)" di TAB 5: Dashboard — lihat fungsi cariPasienPerluDijadwalkan30Hari()
+// dan blok render terkait di renderDashboard(). Deteksi ini murni
+// dihitung dari data schedules + patients.interval_hari (tidak
+// bergantung pada view v_patient_summary), sehingga independen dari
+// logika "Berpotensi Belum Follow-up" yang sudah ada sebelumnya.
 // =====================================================================
 
 // ---- state (depo/farmasi) ----
@@ -1181,6 +1188,70 @@ function hapusJadwalTertunda(i) {
 // =====================================================================
 // TAB 5: DASHBOARD (FARMASI)
 // =====================================================================
+
+// ---------------------------------------------------------------------
+// TAMBAHAN: Deteksi pasien yang belum dijadwalkan ulang setelah siklus
+// terakhirnya, KHUSUS untuk perkiraan jadwal berikutnya yang jatuh dalam
+// 30 hari ke depan (hari ini s/d +30 hari).
+//
+// Dihitung murni dari: jadwal terakhir tiap pasien (allSchedulesCache)
+// + patients.interval_hari. TIDAK bergantung pada view v_patient_summary,
+// sehingga independen dari logika "Berpotensi Belum Follow-up" yang sudah
+// ada sebelumnya (yang mendeteksi kasus yang SUDAH lewat/terlambat).
+// ---------------------------------------------------------------------
+function cariPasienPerluDijadwalkan30Hari() {
+  return Promise.all([
+    loadAllSchedules(),
+    sb.from('patients').select('id, nama, interval_hari')
+  ]).then(function (results) {
+    var list = results[0];
+    var patientsRes = results[1];
+    if (patientsRes.error) throw patientsRes.error;
+
+    var hariIni = dateOnly(new Date());
+    var batasAkhir = new Date(hariIni.getTime() + 30 * 86400000);
+
+    // jadwal terakhir per pasien (berdasarkan patient_id)
+    var terakhirPerPasien = {};
+    list.forEach(function (s) {
+      var key = s.patient_id;
+      if (!terakhirPerPasien[key] || s.dateObj.getTime() > terakhirPerPasien[key].dateObj.getTime()) {
+        terakhirPerPasien[key] = s;
+      }
+    });
+
+    var hasil = [];
+    (patientsRes.data || []).forEach(function (p) {
+      if (!p.interval_hari) return; // tanpa interval, tidak bisa diperkirakan
+      var last = terakhirPerPasien[p.id];
+      if (!last) return; // belum pernah kemo sama sekali, di luar cakupan fitur ini
+
+      var perkiraan = new Date(last.dateObj.getTime() + p.interval_hari * 86400000);
+      var perkiraanD = dateOnly(perkiraan);
+
+      // sudah ada jadwal baru setelah jadwal terakhir? kalau ada, berarti
+      // pasien sudah dijadwalkan ulang, jadi tidak perlu masuk daftar ini.
+      var sudahAdaJadwalBaru = list.some(function (s) {
+        return s.patient_id === p.id && s.dateObj.getTime() > last.dateObj.getTime();
+      });
+      if (sudahAdaJadwalBaru) return;
+
+      if (perkiraanD.getTime() >= hariIni.getTime() && perkiraanD.getTime() <= batasAkhir.getTime()) {
+        var sisaHari = Math.round((perkiraanD.getTime() - hariIni.getTime()) / 86400000);
+        hasil.push({
+          nama: p.nama,
+          tanggalTerakhir: last.tanggal,
+          perkiraanBerikutnya: formatDDMMYYYY(perkiraanD),
+          sisaHari: sisaHari
+        });
+      }
+    });
+
+    hasil.sort(function (a, b) { return a.sisaHari - b.sisaHari; }); // paling dekat tanggalnya di atas
+    return hasil;
+  });
+}
+
 function muatDashboard() {
   setLoading('loadingDashboard', true, 'dashboard');
   document.getElementById('contentDashboard').innerHTML = '';
@@ -1188,11 +1259,13 @@ function muatDashboard() {
   Promise.all([
     loadAllSchedules(),
     sb.from('v_patient_summary').select('nama, perkiraan_kemo_berikutnya'),
-    sb.from('stock_entries').select('obat, jumlah')
+    sb.from('stock_entries').select('obat, jumlah'),
+    cariPasienPerluDijadwalkan30Hari()
   ]).then(function (results) {
     var list = results[0];
     var summaryRes = results[1];
     var stokRes = results[2];
+    var perluDijadwalkan30Hari = results[3];
     dashboardDimuat = true;
     setLoading('loadingDashboard', false);
 
@@ -1276,7 +1349,8 @@ function muatDashboard() {
       stokKritis: stokKritis,
       ringkasanHariIni: ringkasanHariIni,
       ringkasanBesok: ringkasanBesok,
-      pasienBerpotensiHilang: pasienBerpotensiHilang
+      pasienBerpotensiHilang: pasienBerpotensiHilang,
+      perluDijadwalkan30Hari: perluDijadwalkan30Hari
     });
     muatGrafikPasien(modeGrafikPasienAktif);
   }).catch(function (err) {
@@ -1333,6 +1407,25 @@ function renderDashboard(r) {
     html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--success);">';
     html += '<div class="nama" style="font-size:14px;"><i class="ti ti-circle-check" aria-hidden="true" style="color:var(--success); vertical-align:-2px;"></i> Stok Obat Aman</div>';
     html += '<div style="font-size:12px; color:var(--muted);">Stok saat ini mencukupi kebutuhan 7 hari ke depan.</div>';
+    html += '</div>';
+  }
+
+  // ===== TAMBAHAN: Perlu Dijadwalkan Ulang (30 Hari ke Depan) =====
+  // Warna KUNING/ORANYE (--warning, fallback ke --accent) dipakai supaya
+  // beda urgensi dengan "Berpotensi Belum Follow-up" (merah, sudah lewat).
+  // Kuning = perkiraan jadwal berikutnya masih akan datang dalam 30 hari,
+  // jadi sifatnya perencanaan, bukan darurat.
+  if (r.perluDijadwalkan30Hari && r.perluDijadwalkan30Hari.length > 0) {
+    html += '<div class="card" style="margin-bottom:14px; border-left:4px solid var(--warning, var(--accent));">';
+    html += '<div class="nama" style="font-size:14px;"><i class="ti ti-calendar-due" aria-hidden="true" style="color:var(--warning, var(--accent)); vertical-align:-2px;"></i> Perlu Dijadwalkan Ulang &ndash; 30 Hari ke Depan (' + r.perluDijadwalkan30Hari.length + ')</div>';
+    html += '<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Perkiraan jadwal berikutnya jatuh dalam 30 hari ke depan, tapi belum ada jadwal baru.</div>';
+    r.perluDijadwalkan30Hari.forEach(function (p) {
+      html += '<div style="padding:8px 0; border-top:1px solid var(--border);">' +
+        '<div class="total-item" style="padding:0;"><span>' + escapeHtml(p.nama) + '</span>' +
+        '<span style="color:var(--warning, var(--accent)); font-weight:700;">' + p.sisaHari + ' hari lagi</span></div>' +
+        '<div style="font-size:11px; color:var(--muted); margin-top:2px;">Kemo terakhir: ' + p.tanggalTerakhir + ' &middot; Perkiraan berikutnya: ' + p.perkiraanBerikutnya + '</div>' +
+        '</div>';
+    });
     html += '</div>';
   }
 
