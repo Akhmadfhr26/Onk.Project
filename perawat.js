@@ -691,8 +691,10 @@ function renderRiwayatPerawat(nama, list) {
       html += '<input type="date" id="tanggalBaruRiwayatPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
       html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
       html += '<input type="number" id="lamaHariBaruRiwayatPerawat' + i + '" min="1" value="' + item.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+      html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Interval Siklus Selanjutnya (hari) &mdash; opsional</label>';
+      html += '<input type="number" id="intervalBaruRiwayatPerawat' + i + '" min="1" placeholder="Kosongkan = pakai selisih/interval lama" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
       html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
-      html += '<input type="checkbox" id="geserBerikutnyaRiwayatPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
+      html += '<input type="checkbox" id="geserBerikutnyaRiwayatPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya';
       html += '</label>';
       html += '<button type="button" onclick="simpanUbahTanggalRiwayatPerawat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan</button>';
       html += '</div>';
@@ -720,6 +722,13 @@ function simpanUbahTanggalRiwayatPerawat(i) {
   if (!iso) { alert('Pilih tanggal mulai baru terlebih dahulu.'); return; }
   if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
   var geser = document.getElementById('geserBerikutnyaRiwayatPerawat' + i).checked;
+  // Interval baru (opsional): kalau diisi, dipakai untuk menghitung ULANG
+  // jarak antar siklus BERIKUTNYA (berurutan dari tanggal baru ini). Kalau
+  // dikosongkan, perilaku lama tetap dipakai: siklus berikutnya cuma
+  // digeser sejumlah selisih tanggal (interval yang sudah ada tidak berubah).
+  var intervalBaruRaw = document.getElementById('intervalBaruRiwayatPerawat' + i).value;
+  var intervalBaru = intervalBaruRaw ? parseInt(intervalBaruRaw, 10) : NaN;
+  if (intervalBaruRaw && (!intervalBaru || intervalBaru < 1)) { alert('Interval harus angka lebih dari 0, atau kosongkan saja.'); return; }
 
   setLoading('loadingRiwayatPerawat', true);
   document.getElementById('loadingRiwayatPerawat').innerText = 'Menyimpan perubahan...';
@@ -731,15 +740,26 @@ function simpanUbahTanggalRiwayatPerawat(i) {
 
   loadAllNurseSchedules().then(function (list) {
     var updates = [sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru, siklus: siklusBaru || null }).eq('id', p.id)];
-    if (geser && deltaDays !== 0) {
-      list.forEach(function (s) {
-        if (s.id === p.id) return;
-        if (s.patient_id !== p.patient_id) return;
-        if (dateOnly(s.dateObjMulai).getTime() > tanggalLamaObj.getTime()) {
+    if (geser) {
+      var berikutnya = list.filter(function (s) {
+        return s.id !== p.id && s.patient_id === p.patient_id && dateOnly(s.dateObjMulai).getTime() > tanggalLamaObj.getTime();
+      }).sort(function (a, b) { return a.dateObjMulai.getTime() - b.dateObjMulai.getTime(); });
+
+      if (!isNaN(intervalBaru) && intervalBaru > 0) {
+        // Interval baru diisi -> hitung ulang tanggal siklus berikutnya
+        // berurutan dari tanggal baru, berjarak `intervalBaru` hari.
+        berikutnya.forEach(function (s, idx) {
+          var tglBerikutnyaBaru = new Date(tanggalBaruObj.getTime() + intervalBaru * (idx + 1) * 86400000);
+          updates.push(sb.from('nurse_schedules').update({ tanggal_mulai: toIsoDate(tglBerikutnyaBaru) }).eq('id', s.id));
+        });
+      } else if (deltaDays !== 0) {
+        // Interval tidak diisi -> perilaku lama: geser sesuai selisih
+        // tanggal, jarak/interval antar siklus yang sudah ada tetap sama.
+        berikutnya.forEach(function (s) {
           var geseredDate = new Date(s.dateObjMulai.getTime() + deltaDays * 86400000);
           updates.push(sb.from('nurse_schedules').update({ tanggal_mulai: toIsoDate(geseredDate) }).eq('id', s.id));
-        }
-      });
+        });
+      }
     }
     return Promise.all(updates);
   }).then(function (results) {
