@@ -52,6 +52,7 @@ var nursePatientListDimuat = false;
 var nurseAllPatientNames = [];
 var nurseRiwayatPasienAktif = null;
 var nursePasienListTerakhirRiwayat = [];
+var nursePasienAktifData = null; // {id, nama, no_rm, diagnosa, dpjp} milik pasien yang sedang dibuka
 var nurseAllSchedulesCache = null;
 
 // pad2, formatTampilan, formatDDMMYYYY, toIsoDate, dateOnly, escapeHtml,
@@ -534,11 +535,21 @@ function kembaliKeDaftarPasienPerawat() {
 function muatRiwayatPasienDetailPerawat(nama) {
   document.getElementById('contentRiwayatPerawat').innerHTML = '';
   document.getElementById('ringkasanRiwayatPerawat').innerHTML = '';
+  document.getElementById('editDataPasienRiwayatPerawat').innerHTML = '';
   setLoading('loadingRiwayatPerawat', true, 'riwayat');
   document.getElementById('loadingRiwayatPerawat').innerText = 'Memuat riwayat...';
 
-  loadAllNurseSchedules().then(function (list) {
+  Promise.all([
+    loadAllNurseSchedules(),
+    sb.from('nurse_patients').select('id, nama, no_rm, diagnosa, dpjp').ilike('nama', nama).maybeSingle()
+  ]).then(function (results) {
+    var list = results[0];
+    var patientRes = results[1];
     setLoading('loadingRiwayatPerawat', false);
+
+    nursePasienAktifData = patientRes.data || null;
+    renderEditDataPasienPerawat(nursePasienAktifData);
+
     var mine = list.filter(function (s) { return s.nama.toLowerCase() === nama.toLowerCase(); });
     mine.sort(function (a, b) { return a.dateObjMulai.getTime() - b.dateObjMulai.getTime(); });
 
@@ -556,6 +567,65 @@ function muatRiwayatPasienDetailPerawat(nama) {
     siapkanFormTambahRiwayatPerawat(nama, mine);
   }).catch(function (err) {
     document.getElementById('loadingRiwayatPerawat').innerText = 'Gagal memuat: ' + err.message;
+  });
+}
+
+// ---------------------------------------------------------------------
+// Form edit DATA PASIEN (nama, No. RM, Diagnosa, DPJP) — tampil di atas
+// riwayat, bisa diedit langsung tanpa lewat form "Daftarkan Pasien".
+// ---------------------------------------------------------------------
+function renderEditDataPasienPerawat(data) {
+  var container = document.getElementById('editDataPasienRiwayatPerawat');
+  if (!container) return;
+  if (!data) { container.innerHTML = ''; return; }
+
+  var html = '<div class="card" id="editDataPasienForm" style="display:none;">';
+  html += '<div class="nama" style="font-size:14px; margin-bottom:8px;">Edit Data Pasien</div>';
+  html += '<label class="field-label">Nama</label>';
+  html += '<input type="text" id="editPasienNama" value="' + escapeHtml(data.nama || '') + '">';
+  html += '<div class="form-row-2"><div><label class="field-label">No. RM</label>' +
+    '<input type="text" id="editPasienNoRm" value="' + escapeHtml(data.no_rm || '') + '"></div>' +
+    '<div><label class="field-label">DPJP</label>' +
+    '<input type="text" id="editPasienDpjp" value="' + escapeHtml(data.dpjp || '') + '"></div></div>';
+  html += '<label class="field-label">Diagnosa</label>';
+  html += '<input type="text" id="editPasienDiagnosa" value="' + escapeHtml(data.diagnosa || '') + '">';
+  html += '<div id="editDataPasienStatus" class="status-msg"></div>';
+  html += '<button type="button" class="btn-primary" onclick="simpanEditDataPasienPerawat()">Simpan Data Pasien</button>';
+  html += '</div>';
+
+  container.innerHTML = renderIkonBtn('ti-pencil', 'Edit Data Pasien', 'btn-accent', 'toggleEditDataPasienPerawat()', 'margin-bottom:10px;') + html;
+}
+
+function toggleEditDataPasienPerawat() {
+  var el = document.getElementById('editDataPasienForm');
+  if (!el) return;
+  el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+}
+
+function simpanEditDataPasienPerawat() {
+  if (!nursePasienAktifData) return;
+  var namaBaru = document.getElementById('editPasienNama').value.trim();
+  var noRmBaru = document.getElementById('editPasienNoRm').value.trim();
+  var diagnosaBaru = document.getElementById('editPasienDiagnosa').value.trim();
+  var dpjpBaru = document.getElementById('editPasienDpjp').value.trim();
+  var statusEl = document.getElementById('editDataPasienStatus');
+
+  if (!namaBaru) { statusEl.className = 'status-msg error'; statusEl.textContent = 'Nama tidak boleh kosong.'; return; }
+
+  statusEl.className = 'status-msg';
+  statusEl.textContent = 'Menyimpan...';
+
+  sb.from('nurse_patients').update({
+    nama: namaBaru, no_rm: noRmBaru || null, diagnosa: diagnosaBaru || null, dpjp: dpjpBaru || null
+  }).eq('id', nursePasienAktifData.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    nurseRiwayatPasienAktif = namaBaru;
+    document.getElementById('riwayatPerawatDetailNama').textContent = namaBaru;
+    muatRiwayatPasienDetailPerawat(namaBaru);
+  }).catch(function (err) {
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Gagal: ' + err.message;
   });
 }
 
@@ -595,6 +665,8 @@ function renderRiwayatPerawat(nama, list) {
     html += '</div>';
 
     html += '<div id="ubahTanggalRiwayatPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Siklus</label>';
+    html += '<input type="text" id="siklusBaruRiwayatPerawat' + i + '" value="' + escapeHtml(item.siklus || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
     html += '<input type="date" id="tanggalBaruRiwayatPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
     html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
@@ -619,6 +691,7 @@ function toggleUbahTanggalRiwayatPerawat(i) {
 function simpanUbahTanggalRiwayatPerawat(i) {
   var p = nursePasienListTerakhirRiwayat[i];
   if (!p) return;
+  var siklusBaru = document.getElementById('siklusBaruRiwayatPerawat' + i).value.trim();
   var iso = document.getElementById('tanggalBaruRiwayatPerawat' + i).value;
   var lamaHariBaru = parseInt(document.getElementById('lamaHariBaruRiwayatPerawat' + i).value, 10);
   if (!iso) { alert('Pilih tanggal mulai baru terlebih dahulu.'); return; }
@@ -634,7 +707,7 @@ function simpanUbahTanggalRiwayatPerawat(i) {
   var deltaDays = Math.round((tanggalBaruObj.getTime() - tanggalLamaObj.getTime()) / 86400000);
 
   loadAllNurseSchedules().then(function (list) {
-    var updates = [sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru }).eq('id', p.id)];
+    var updates = [sb.from('nurse_schedules').update({ tanggal_mulai: iso, lama_hari: lamaHariBaru, siklus: siklusBaru || null }).eq('id', p.id)];
     if (geser && deltaDays !== 0) {
       list.forEach(function (s) {
         if (s.id === p.id) return;
@@ -891,24 +964,38 @@ function renderVerifikasiPerawat(list) {
     return;
   }
 
+  // Formulir bisa diedit dulu (No. RM, Diagnosa, DPJP, Siklus, Tanggal
+  // Mulai, Lama Hari) sebelum diverifikasi/ditolak — nilai di kolom-kolom
+  // ini yang dipakai saat tombol Verifikasi/Tolak ditekan (lihat
+  // verifikasiJadwalPerawat), bukan lagi nilai asli dari perawat ruangan.
   var html = '<div class="ringkasan-jumlah">' + list.length + ' menunggu verifikasi</div>';
   list.forEach(function (p, i) {
     var warnaBorder = warnaStatus('Menunggu Verifikasi');
     html += '<div class="card" style="border-left:4px solid ' + warnaBorder + ';">';
     html += '<div class="nama-row">' + renderAvatarInisial(p.nama, 'Menunggu Verifikasi') +
       '<div class="nama-info"><div class="nama">' + escapeHtml(p.nama) + '</div>' +
-      '<div class="sub-info">' +
-      (p.noRm ? ('RM ' + escapeHtml(p.noRm) + ' &middot; ') : '') +
-      (p.diagnosa ? (escapeHtml(p.diagnosa) + ' &middot; ') : '') +
-      (p.dpjp ? ('DPJP: ' + escapeHtml(p.dpjp)) : '') +
-      '</div></div>' + renderBadge('Menunggu Verifikasi') + '</div>';
-    html += '<div class="obat-item"><span>Siklus ' + escapeHtml(p.siklus || '-') + '</span>' +
-      '<span class="obat-jumlah">Mulai ' + p.tanggalMulai + ' &middot; ' + p.lamaHari + ' hari</span></div>';
-    if (p.diinputOlehRole) {
-      html += '<div style="font-size:11px; color:var(--muted); margin-top:2px;">Diinput oleh role: ' + escapeHtml(p.diinputOlehRole) + '</div>';
-    }
+      (p.diinputOlehRole ? ('<div class="sub-info">Diinput oleh role: ' + escapeHtml(p.diinputOlehRole) + '</div>') : '') +
+      '</div>' + renderBadge('Menunggu Verifikasi') + '</div>';
 
-    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
+    html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">';
+    html += '<div><label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">No. RM</label>' +
+      '<input type="text" id="verNoRm' + i + '" value="' + escapeHtml(p.noRm || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px;"></div>';
+    html += '<div><label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">DPJP</label>' +
+      '<input type="text" id="verDpjp' + i + '" value="' + escapeHtml(p.dpjp || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px;"></div>';
+    html += '</div>';
+    html += '<div style="margin-top:8px;"><label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Diagnosa</label>' +
+      '<input type="text" id="verDiagnosa' + i + '" value="' + escapeHtml(p.diagnosa || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px;"></div>';
+
+    html += '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">';
+    html += '<div><label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Siklus</label>' +
+      '<input type="text" id="verSiklus' + i + '" value="' + escapeHtml(p.siklus || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px;"></div>';
+    html += '<div><label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai</label>' +
+      '<input type="date" id="verTanggal' + i + '" value="' + toIsoDate(p.dateObjMulai) + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px;"></div>';
+    html += '<div><label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>' +
+      '<input type="number" id="verLamaHari' + i + '" min="1" value="' + p.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px;"></div>';
+    html += '</div>';
+
+    html += '<div style="display:flex; gap:6px; margin-top:10px;">';
     html += renderIkonBtn('ti-circle-check', 'Verifikasi', 'btn-primary', 'verifikasiJadwalPerawat(' + i + ', true)', 'flex:1;');
     html += renderIkonBtn('ti-circle-x', 'Tolak', 'btn-danger', 'verifikasiJadwalPerawat(' + i + ', false)', 'flex:1;');
     html += '</div>';
@@ -921,9 +1008,19 @@ function verifikasiJadwalPerawat(i, disetujui) {
   var p = nursePasienListTerakhirVerifikasi[i];
   if (!p) return;
 
+  var noRmBaru = document.getElementById('verNoRm' + i).value.trim();
+  var diagnosaBaru = document.getElementById('verDiagnosa' + i).value.trim();
+  var dpjpBaru = document.getElementById('verDpjp' + i).value.trim();
+  var siklusBaru = document.getElementById('verSiklus' + i).value.trim();
+  var isoTanggalBaru = document.getElementById('verTanggal' + i).value;
+  var lamaHariBaru = parseInt(document.getElementById('verLamaHari' + i).value, 10);
+
+  if (!isoTanggalBaru) { alert('Tanggal mulai wajib diisi.'); return; }
+  if (!lamaHariBaru || lamaHariBaru < 1) { alert('Lama hari minimal 1.'); return; }
+
   var catatan = null;
   if (disetujui) {
-    if (!window.confirm('Verifikasi jadwal ' + p.nama + ' (Siklus ' + p.siklus + ')?\n\nJadwal ini akan langsung tampil di kalender perawat.')) return;
+    if (!window.confirm('Verifikasi jadwal ' + p.nama + ' (Siklus ' + siklusBaru + ')?\n\nJadwal ini akan langsung tampil di kalender perawat sesuai data yang sudah diedit di formulir.')) return;
   } else {
     catatan = window.prompt('Alasan penolakan (opsional, boleh dikosongkan):', '');
     if (catatan === null) return; // batal (klik Cancel)
@@ -932,13 +1029,22 @@ function verifikasiJadwalPerawat(i, disetujui) {
   setLoading('loadingVerifikasiPerawat', true);
   document.getElementById('loadingVerifikasiPerawat').innerText = disetujui ? 'Memverifikasi...' : 'Menolak...';
 
-  sb.from('nurse_schedules').update({
-    status_verifikasi: disetujui ? 'terverifikasi' : 'ditolak',
-    diverifikasi_oleh: currentUserId,
-    diverifikasi_at: new Date().toISOString(),
-    catatan_verifikasi: catatan || null
-  }).eq('id', p.id).then(function (res) {
-    if (res.error) throw res.error;
+  Promise.all([
+    sb.from('nurse_patients').update({
+      no_rm: noRmBaru || null, diagnosa: diagnosaBaru || null, dpjp: dpjpBaru || null
+    }).eq('id', p.patient_id),
+    sb.from('nurse_schedules').update({
+      tanggal_mulai: isoTanggalBaru,
+      siklus: siklusBaru || null,
+      lama_hari: lamaHariBaru,
+      status_verifikasi: disetujui ? 'terverifikasi' : 'ditolak',
+      diverifikasi_oleh: currentUserId,
+      diverifikasi_at: new Date().toISOString(),
+      catatan_verifikasi: catatan || null
+    }).eq('id', p.id)
+  ]).then(function (results) {
+    var failed = results.find(function (r) { return r.error; });
+    if (failed) throw failed.error;
     invalidateNurseCacheAndReload();
     muatVerifikasiPerawat();
   }).catch(function (err) {
