@@ -1,4 +1,4 @@
-var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+ sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 // =====================================================================
 // AUTH
@@ -7,11 +7,11 @@ var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_
 // Tambahkan baris baru di sini kalau mau bikin ID pendek yang lain.
 // (Kalau ID yang diketik mengandung "@", sistem akan langsung memakainya
 // sebagai email apa adanya, jadi tidak wajib didaftarkan di sini dulu.)
-var LOGIN_ID_MAP = {
+ LOGIN_ID_MAP = {
   'depo': 'depo@klinik.local',
-  'Kemo': 'perawat@klinik.local',
-  'Fahri': 'admin@klinik.local',
-  'Irna': 'enggang3@klinik.local'
+  'kemo': 'perawat@klinik.local',
+  'fahri': 'admin@klinik.local',
+  'irna': 'enggang3@klinik.local'
   // Contoh untuk role baru (lihat migrasi_verifikasi_ruangan.sql) —
   // tambahkan satu baris per akun perawat ruangan/perawat kemo yang
   // dibuat, ID di sini tinggal kata bebas, yang penting cocok dengan
@@ -21,8 +21,8 @@ var LOGIN_ID_MAP = {
 };
 
 function handleLogin() {
-  var idInput = document.getElementById('loginEmail').value.trim();
-  var password = document.getElementById('loginPassword').value;
+   idInput = document.getElementById('loginEmail').value.trim();
+   password = document.getElementById('loginPassword').value;
   var errEl = document.getElementById('loginError');
   errEl.textContent = '';
   if (!idInput || !password) { errEl.textContent = 'Isi ID dan kata sandi.'; return; }
@@ -70,8 +70,8 @@ function handleLogout() {
 //                    menyetujui/menolak input dari perawat_ruangan.
 // admin           : semua tab di atas sekaligus.
 // =====================================================================
-var NURSE_ROLES = ['perawat', 'perawat_ruangan', 'perawat_kemo'];
-var TAB_ROLES = {
+ NURSE_ROLES = ['perawat', 'perawat_ruangan', 'perawat_kemo'];
+ TAB_ROLES = {
   kalender: ['depo', 'admin'],
   rentang: ['depo', 'admin'],
   riwayat: ['depo', 'admin'],
@@ -89,21 +89,21 @@ var TAB_ROLES = {
 
 function applyRoleUI(role) {
   Object.keys(TAB_ROLES).forEach(function (t) {
-    var btn = document.getElementById('tabBtn' + capitalize(t));
+     btn = document.getElementById('tabBtn' + capitalize(t));
     if (btn) btn.style.display = (TAB_ROLES[t].indexOf(role) !== -1) ? '' : 'none';
   });
-  var lblFarmasi = document.getElementById('sidebarLabelFarmasi');
-  var lblPerawat = document.getElementById('sidebarLabelPerawat');
+   lblFarmasi = document.getElementById('sidebarLabelFarmasi');
+   lblPerawat = document.getElementById('sidebarLabelPerawat');
   if (lblFarmasi) lblFarmasi.style.display = (role === 'depo' || role === 'admin') ? '' : 'none';
   if (lblPerawat) lblPerawat.style.display = (NURSE_ROLES.indexOf(role) !== -1 || role === 'admin') ? '' : 'none';
 
   // Catatan khusus untuk perawat_ruangan: input mereka butuh verifikasi
   // dulu sebelum tampil di kalender. Elemen-elemen ini opsional di
   // index.html (dicek dulu supaya tidak error kalau belum ada).
-  var isRuangan = (role === 'perawat_ruangan');
-  var catatanTambah = document.getElementById('tambahPerawatCatatanRuangan');
+   isRuangan = (role === 'perawat_ruangan');
+   catatanTambah = document.getElementById('tambahPerawatCatatanRuangan');
   if (catatanTambah) catatanTambah.style.display = isRuangan ? 'block' : 'none';
-  var catatanRiwayat = document.getElementById('riwayatPerawatCatatanRuangan');
+   catatanRiwayat = document.getElementById('riwayatPerawatCatatanRuangan');
   if (catatanRiwayat) catatanRiwayat.style.display = isRuangan ? 'block' : 'none';
 }
 
@@ -125,7 +125,7 @@ function showApp(user) {
     tanggalAktif = new Date();
     nurseTanggalAktif = new Date();
     document.getElementById('kalTanggalJump').value = toIsoDate(tanggalAktif);
-    var kalPerawatJump = document.getElementById('kalPerawatTanggalJump');
+     kalPerawatJump = document.getElementById('kalPerawatTanggalJump');
     if (kalPerawatJump) kalPerawatJump.value = toIsoDate(nurseTanggalAktif);
 
     if (NURSE_ROLES.indexOf(currentUserRole) !== -1) {
@@ -140,18 +140,18 @@ function showApp(user) {
 // Tab switching (menangani tab farmasi + tab perawat)
 // =====================================================================
 function switchTab(nama) {
-  var tabs = Object.keys(TAB_ROLES);
+   tabs = Object.keys(TAB_ROLES);
   tabs.forEach(function (t) {
-    var contentEl = document.getElementById('tab' + capitalize(t));
-    var btnEl = document.getElementById('tabBtn' + capitalize(t));
+     contentEl = document.getElementById('tab' + capitalize(t));
+     btnEl = document.getElementById('tabBtn' + capitalize(t));
     if (contentEl) contentEl.style.display = (nama === t) ? 'block' : 'none';
     if (btnEl) btnEl.classList.toggle('active', nama === t);
   });
 
   if (nama === 'rentang') {
     if (!document.getElementById('rentangMulai').value) {
-      var hariIni = new Date();
-      var seminggu = new Date();
+       hariIni = new Date();
+       seminggu = new Date();
       seminggu.setDate(seminggu.getDate() - 6);
       document.getElementById('rentangMulai').value = toIsoDate(seminggu);
       document.getElementById('rentangAkhir').value = toIsoDate(hariIni);
