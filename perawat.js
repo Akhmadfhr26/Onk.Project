@@ -43,6 +43,7 @@
 
 // ---- state (PERAWAT) — terpisah total dari state farmasi di atas ----
 var currentUserRole = null;
+var currentUserId = null;
 var nurseTanggalAktif = new Date();
 var nurseBulanKalenderAktif = new Date();
 var nurseKalHariDataTerakhir = {};
@@ -76,6 +77,11 @@ function simpanBeberapaSiklusJadwalPerawat(patientId, tanggalMulaiObj, siklusAwa
   var totalSiklus = (!isNaN(siklusAwalNum) && !isNaN(siklusAkhirNum)) ? (siklusAkhirNum - siklusAwalNum + 1) : 1;
   if (totalSiklus < 1) totalSiklus = 1;
 
+  // Perawat ruangan (perawat_ruangan): input masuk sebagai "menunggu_verifikasi"
+  // dan belum tampil di kalender sampai diverifikasi oleh perawat_kemo/perawat/admin.
+  // Role lain (perawat/perawat_kemo/admin) tetap otomatis "terverifikasi" seperti biasa.
+  var statusAwal = (currentUserRole === 'perawat_ruangan') ? 'menunggu_verifikasi' : 'terverifikasi';
+
   var scheduleInserts = [];
   for (var c = 0; c < totalSiklus; c++) {
     var tglSiklus = new Date(tanggalMulaiObj.getTime() + c * (interval || 0) * 86400000);
@@ -84,7 +90,10 @@ function simpanBeberapaSiklusJadwalPerawat(patientId, tanggalMulaiObj, siklusAwa
       patient_id: patientId,
       tanggal_mulai: toIsoDate(tglSiklus),
       siklus: siklusLabel,
-      lama_hari: lamaHari || 1
+      lama_hari: lamaHari || 1,
+      status_verifikasi: statusAwal,
+      diinput_oleh: currentUserId,
+      diinput_oleh_role: currentUserRole
     });
   }
 
@@ -103,11 +112,22 @@ function simpanBeberapaSiklusJadwalPerawat(patientId, tanggalMulaiObj, siklusAwa
 // =====================================================================
 // =====================================================================
 
+// Status verifikasi (lihat migrasi_verifikasi_ruangan.sql) override status
+// tampilan biasa (hitungStatus) selama jadwal itu belum/tidak terverifikasi.
+// Kalau kolomnya belum ada di database (migrasi belum dijalankan), Supabase
+// hanya tidak mengembalikan field tsb, jadi statusVerifikasi bernilai
+// undefined dan fungsi ini otomatis jatuh ke perilaku lama (hitungStatus biasa).
+function statusTampilanPerawat(dateObj, keterangan, statusVerifikasi) {
+  if (statusVerifikasi === 'menunggu_verifikasi') return 'Menunggu Verifikasi';
+  if (statusVerifikasi === 'ditolak') return 'Ditolak';
+  return hitungStatus(dateObj, keterangan);
+}
+
 function loadAllNurseSchedules(forceReload) {
   if (nurseAllSchedulesCache && !forceReload) return Promise.resolve(nurseAllSchedulesCache);
 
   return sb.from('nurse_schedules')
-    .select('id, patient_id, tanggal_mulai, siklus, lama_hari, keterangan, nurse_patients(nama, no_rm, diagnosa, dpjp)')
+    .select('id, patient_id, tanggal_mulai, siklus, lama_hari, keterangan, status_verifikasi, diinput_oleh, diinput_oleh_role, diverifikasi_oleh, diverifikasi_at, catatan_verifikasi, nurse_patients(nama, no_rm, diagnosa, dpjp)')
     .then(function (res) {
       if (res.error) throw res.error;
       var list = (res.data || []).map(function (row) {
@@ -124,7 +144,16 @@ function loadAllNurseSchedules(forceReload) {
           tanggalMulai: formatDDMMYYYY(d),
           siklus: row.siklus || '',
           lamaHari: row.lama_hari || 1,
-          keterangan: row.keterangan || ''
+          keterangan: row.keterangan || '',
+          // Default 'terverifikasi' kalau kolomnya belum ada/kosong (baris
+          // lama sebelum migrasi verifikasi dijalankan) supaya tetap tampil
+          // di kalender seperti perilaku sebelumnya.
+          statusVerifikasi: row.status_verifikasi || 'terverifikasi',
+          diinputOleh: row.diinput_oleh || null,
+          diinputOlehRole: row.diinput_oleh_role || '',
+          diverifikasiOleh: row.diverifikasi_oleh || null,
+          diverifikasiAt: row.diverifikasi_at || null,
+          catatanVerifikasi: row.catatan_verifikasi || ''
         };
       });
       nurseAllSchedulesCache = list;
@@ -175,6 +204,9 @@ function muatKalenderPerawat() {
     setLoading('loadingKalenderPerawat', false);
     var hariData = {};
     list.forEach(function (s) {
+      // Jadwal yang masih menunggu verifikasi (atau ditolak) belum boleh
+      // tampil di kalender perawat — lihat migrasi_verifikasi_ruangan.sql.
+      if (s.statusVerifikasi !== 'terverifikasi') return;
       for (var h = 0; h < s.lamaHari; h++) {
         var tglSel = new Date(s.dateObjMulai.getTime() + h * 86400000);
         if (tglSel.getFullYear() !== tahun || (tglSel.getMonth() + 1) !== bulan) continue;
@@ -242,6 +274,9 @@ function muatDetailTanggalPerawat() {
     var target = dateOnly(nurseTanggalAktif).getTime();
     var matches = [];
     list.forEach(function (s) {
+      // Sama seperti kalender: jadwal menunggu verifikasi/ditolak belum
+      // muncul di detail tanggal.
+      if (s.statusVerifikasi !== 'terverifikasi') return;
       for (var h = 0; h < s.lamaHari; h++) {
         var tglSel = dateOnly(new Date(s.dateObjMulai.getTime() + h * 86400000));
         if (tglSel.getTime() === target) {
@@ -512,7 +547,8 @@ function muatRiwayatPasienDetailPerawat(nama) {
         id: s.id, patient_id: s.patient_id, tanggalMulai: s.tanggalMulai, dateObjMulai: s.dateObjMulai,
         siklus: s.siklus, lamaHari: s.lamaHari, keterangan: s.keterangan,
         noRm: s.noRm, diagnosa: s.diagnosa, dpjp: s.dpjp,
-        status: hitungStatus(s.dateObjMulai, s.keterangan)
+        statusVerifikasi: s.statusVerifikasi, catatanVerifikasi: s.catatanVerifikasi,
+        status: statusTampilanPerawat(s.dateObjMulai, s.keterangan, s.statusVerifikasi)
       };
     });
 
@@ -545,6 +581,13 @@ function renderRiwayatPerawat(nama, list) {
       '<div class="timeline-tanggal" style="display:flex; justify-content:space-between; align-items:center;">' +
       '<span>' + rentang + (isTerakhir ? ' (Terakhir)' : '') + '</span>' + renderBadge(item.status) + '</div>' +
       '<div class="timeline-siklus">Siklus ' + escapeHtml(item.siklus) + '</div>';
+
+    if (item.status === 'Menunggu Verifikasi') {
+      html += '<div style="font-size:11px; color:var(--muted); margin-top:4px;"><i class="ti ti-info-circle" aria-hidden="true"></i> Belum tampil di kalender perawat &mdash; menunggu verifikasi perawat ruangan kemo.</div>';
+    } else if (item.status === 'Ditolak') {
+      html += '<div style="font-size:11px; color:var(--danger); margin-top:4px;"><i class="ti ti-alert-circle" aria-hidden="true"></i> Ditolak' +
+        (item.catatanVerifikasi ? (': ' + escapeHtml(item.catatanVerifikasi)) : '.') + '</div>';
+    }
 
     html += '<div style="display:flex; gap:6px; margin-top:8px;">';
     html += renderIkonBtn('ti-pencil', 'Ubah Jadwal', 'btn-accent', 'toggleUbahTanggalRiwayatPerawat(' + i + ')', 'flex:1;');
@@ -691,7 +734,9 @@ function submitTambahJadwalRiwayatPerawat() {
   }).then(function (jumlahSiklusDibuat) {
     document.getElementById('riwayatPerawatTambahSubmitBtn').disabled = false;
     statusEl.className = 'status-msg ok';
-    statusEl.textContent = 'Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.';
+    statusEl.textContent = (currentUserRole === 'perawat_ruangan')
+      ? ('Berhasil disimpan! ' + jumlahSiklusDibuat + ' siklus menunggu verifikasi perawat ruangan kemo sebelum tampil di kalender.')
+      : ('Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.');
     invalidateNurseCacheAndReload();
     if (elSiklusAkhir) elSiklusAkhir.value = '';
     muatRiwayatPasienDetailPerawat(nama);
@@ -800,7 +845,9 @@ function submitTambahPasienPerawat() {
   }).then(function (jumlahSiklusDibuat) {
     document.getElementById('tambahPerawatSubmitBtn').disabled = false;
     statusEl.className = 'status-msg ok';
-    statusEl.textContent = 'Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.';
+    statusEl.textContent = (currentUserRole === 'perawat_ruangan')
+      ? ('Berhasil disimpan! ' + jumlahSiklusDibuat + ' siklus menunggu verifikasi perawat ruangan kemo sebelum tampil di kalender.')
+      : ('Berhasil! ' + jumlahSiklusDibuat + ' siklus tersimpan.');
     invalidateNurseCacheAndReload();
     document.getElementById('tambahPerawatSiklus').value = '';
     if (elSiklusAkhir) elSiklusAkhir.value = '';
@@ -808,6 +855,95 @@ function submitTambahPasienPerawat() {
     document.getElementById('tambahPerawatSubmitBtn').disabled = false;
     statusEl.className = 'status-msg error';
     statusEl.textContent = 'Gagal: ' + err.message;
+  });
+}
+
+// ---------------------------------------------------------------------
+// TAB PERAWAT 4: VERIFIKASI PASIEN
+// (khusus role 'perawat', 'perawat_kemo', 'admin' — lihat TAB_ROLES di
+// auth.js). Menampilkan semua jadwal berstatus "menunggu_verifikasi"
+// dari perawat ruangan, supaya bisa disetujui (langsung tampil di
+// kalender) atau ditolak (dengan catatan alasan opsional).
+// ---------------------------------------------------------------------
+var nursePasienListTerakhirVerifikasi = [];
+
+function muatVerifikasiPerawat() {
+  setLoading('loadingVerifikasiPerawat', true, 'list');
+  document.getElementById('verifikasiPerawatContainer').innerHTML = '';
+
+  loadAllNurseSchedules(true).then(function (list) {
+    setLoading('loadingVerifikasiPerawat', false);
+    var pending = list.filter(function (s) { return s.statusVerifikasi === 'menunggu_verifikasi'; });
+    pending.sort(function (a, b) { return a.dateObjMulai.getTime() - b.dateObjMulai.getTime(); });
+    nursePasienListTerakhirVerifikasi = pending;
+    renderVerifikasiPerawat(pending);
+  }).catch(function (err) {
+    document.getElementById('loadingVerifikasiPerawat').innerText = 'Gagal memuat: ' + err.message;
+  });
+}
+
+function renderVerifikasiPerawat(list) {
+  var container = document.getElementById('verifikasiPerawatContainer');
+  if (!container) return;
+
+  if (!list || list.length === 0) {
+    container.innerHTML = '<div class="empty"><i class="ti ti-circle-check" aria-hidden="true"></i>Tidak ada input pasien yang menunggu verifikasi.</div>';
+    return;
+  }
+
+  var html = '<div class="ringkasan-jumlah">' + list.length + ' menunggu verifikasi</div>';
+  list.forEach(function (p, i) {
+    var warnaBorder = warnaStatus('Menunggu Verifikasi');
+    html += '<div class="card" style="border-left:4px solid ' + warnaBorder + ';">';
+    html += '<div class="nama-row">' + renderAvatarInisial(p.nama, 'Menunggu Verifikasi') +
+      '<div class="nama-info"><div class="nama">' + escapeHtml(p.nama) + '</div>' +
+      '<div class="sub-info">' +
+      (p.noRm ? ('RM ' + escapeHtml(p.noRm) + ' &middot; ') : '') +
+      (p.diagnosa ? (escapeHtml(p.diagnosa) + ' &middot; ') : '') +
+      (p.dpjp ? ('DPJP: ' + escapeHtml(p.dpjp)) : '') +
+      '</div></div>' + renderBadge('Menunggu Verifikasi') + '</div>';
+    html += '<div class="obat-item"><span>Siklus ' + escapeHtml(p.siklus || '-') + '</span>' +
+      '<span class="obat-jumlah">Mulai ' + p.tanggalMulai + ' &middot; ' + p.lamaHari + ' hari</span></div>';
+    if (p.diinputOlehRole) {
+      html += '<div style="font-size:11px; color:var(--muted); margin-top:2px;">Diinput oleh role: ' + escapeHtml(p.diinputOlehRole) + '</div>';
+    }
+
+    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
+    html += renderIkonBtn('ti-circle-check', 'Verifikasi', 'btn-primary', 'verifikasiJadwalPerawat(' + i + ', true)', 'flex:1;');
+    html += renderIkonBtn('ti-circle-x', 'Tolak', 'btn-danger', 'verifikasiJadwalPerawat(' + i + ', false)', 'flex:1;');
+    html += '</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function verifikasiJadwalPerawat(i, disetujui) {
+  var p = nursePasienListTerakhirVerifikasi[i];
+  if (!p) return;
+
+  var catatan = null;
+  if (disetujui) {
+    if (!window.confirm('Verifikasi jadwal ' + p.nama + ' (Siklus ' + p.siklus + ')?\n\nJadwal ini akan langsung tampil di kalender perawat.')) return;
+  } else {
+    catatan = window.prompt('Alasan penolakan (opsional, boleh dikosongkan):', '');
+    if (catatan === null) return; // batal (klik Cancel)
+  }
+
+  setLoading('loadingVerifikasiPerawat', true);
+  document.getElementById('loadingVerifikasiPerawat').innerText = disetujui ? 'Memverifikasi...' : 'Menolak...';
+
+  sb.from('nurse_schedules').update({
+    status_verifikasi: disetujui ? 'terverifikasi' : 'ditolak',
+    diverifikasi_oleh: currentUserId,
+    diverifikasi_at: new Date().toISOString(),
+    catatan_verifikasi: catatan || null
+  }).eq('id', p.id).then(function (res) {
+    if (res.error) throw res.error;
+    invalidateNurseCacheAndReload();
+    muatVerifikasiPerawat();
+  }).catch(function (err) {
+    setLoading('loadingVerifikasiPerawat', false);
+    alert('Gagal: ' + err.message);
   });
 }
 

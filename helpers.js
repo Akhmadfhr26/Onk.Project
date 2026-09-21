@@ -26,7 +26,10 @@ function escapeHtml(str) {
 // progress bar stok tanpa mengubah alur data di fungsi-fungsi lain.
 // =====================================================================
 function warnaStatus(status) {
-  var warna = { 'Tertunda': '#E23B57', 'Sudah Kemo': '#1E9C6B', 'Hari Ini': '#0E9488', 'Belum Kemo': '#7C8CA0' };
+  var warna = {
+    'Tertunda': '#E23B57', 'Sudah Kemo': '#1E9C6B', 'Hari Ini': '#0E9488', 'Belum Kemo': '#7C8CA0',
+    'Menunggu Verifikasi': '#F5A524', 'Ditolak': '#8A94A6'
+  };
   return warna[status] || '#7C8CA0';
 }
 
