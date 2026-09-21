@@ -10,7 +10,7 @@ var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_
 var LOGIN_ID_MAP = {
   'depo': 'depo@klinik.local',
   'perawat': 'perawat@klinik.local',
-  'admin': 'admin@klinik.local'
+  'admin': 'admin@klinik.local',
   'e3': 'enggang3@klinik.local'
   // Contoh untuk role baru (lihat migrasi_verifikasi_ruangan.sql) —
   // tambahkan satu baris per akun perawat ruangan/perawat kemo yang
