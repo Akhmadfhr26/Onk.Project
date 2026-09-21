@@ -296,6 +296,16 @@ function muatDetailTanggalPerawat() {
   });
 }
 
+// Perawat ruangan (perawat_ruangan) hanya boleh MELIHAT kalender & list
+// pasien kemoterapi, dan menambahkan pasien/jadwal baru (yang baru
+// tampil di kalender setelah diverifikasi perawat kemo). Tidak boleh
+// mengubah/menghapus jadwal atau data pasien yang sudah ada — baik
+// tombolnya disembunyikan di tampilan, maupun fungsinya dijaga di sisi
+// JS supaya tidak bisa dipanggil langsung.
+function isPerawatRuangan() {
+  return currentUserRole === 'perawat_ruangan';
+}
+
 function renderJadwalTanggalPerawat(matches) {
   nursePasienListTerakhirTanggal = matches;
 
@@ -304,6 +314,7 @@ function renderJadwalTanggalPerawat(matches) {
     return;
   }
 
+  var bolehEdit = !isPerawatRuangan();
   var html = '<div class="ringkasan-jumlah">' + matches.length + ' pasien terjadwal</div>';
   matches.forEach(function (p, i) {
     var warnaBorder = warnaStatus(p.status);
@@ -317,26 +328,28 @@ function renderJadwalTanggalPerawat(matches) {
       '</div></div>' + renderBadge(p.status) + '</div>';
     html += '<div class="obat-item"><span>Siklus ' + escapeHtml(p.siklus || '-') + '</span><span class="obat-jumlah">H' + p.hariKe + ' dari ' + p.lamaHari + '</span></div>';
 
-    html += '<div style="display:flex; gap:6px; margin-top:8px; align-items:stretch;">';
-    if (p.status === 'Tertunda') {
-      html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaPerawat(' + i + ', false)', 'flex:1;');
-    } else {
-      html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaPerawat(' + i + ', true)', 'flex:1;');
-    }
-    html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalPerawat(' + i + ')', 'flex:1;');
-    html += renderIkonBtnBulat('ti-trash', 'hapusJadwalPerawatDariKalender(' + i + ')', 'Hapus Jadwal');
-    html += '</div>';
+    if (bolehEdit) {
+      html += '<div style="display:flex; gap:6px; margin-top:8px; align-items:stretch;">';
+      if (p.status === 'Tertunda') {
+        html += renderIkonBtn('ti-rotate', 'Batalkan', 'btn-neutral', 'toggleTertundaPerawat(' + i + ', false)', 'flex:1;');
+      } else {
+        html += renderIkonBtn('ti-clock-pause', 'Tandai Tertunda', 'btn-danger', 'toggleTertundaPerawat(' + i + ', true)', 'flex:1;');
+      }
+      html += renderIkonBtn('ti-pencil', 'Ubah', 'btn-accent', 'toggleUbahTanggalPerawat(' + i + ')', 'flex:1;');
+      html += renderIkonBtnBulat('ti-trash', 'hapusJadwalPerawatDariKalender(' + i + ')', 'Hapus Jadwal');
+      html += '</div>';
 
-    html += '<div id="ubahTanggalPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
-    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
-    html += '<input type="date" id="tanggalBaruPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
-    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
-    html += '<input type="number" id="lamaHariBaruPerawat' + i + '" min="1" value="' + p.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
-    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
-    html += '<input type="checkbox" id="geserBerikutnyaPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
-    html += '</label>';
-    html += '<button type="button" onclick="simpanUbahJadwalPerawat(' + i + ')" style="width:100%; background:var(--success); color:#fff; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Simpan</button>';
-    html += '</div>';
+      html += '<div id="ubahTanggalPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+      html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
+      html += '<input type="date" id="tanggalBaruPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+      html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
+      html += '<input type="number" id="lamaHariBaruPerawat' + i + '" min="1" value="' + p.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+      html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
+      html += '<input type="checkbox" id="geserBerikutnyaPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
+      html += '</label>';
+      html += '<button type="button" onclick="simpanUbahJadwalPerawat(' + i + ')" style="width:100%; background:var(--success); color:#fff; border:none; border-radius:16px; padding:8px; font-size:12px; font-weight:600;">Simpan</button>';
+      html += '</div>';
+    }
     html += '</div>';
   });
 
@@ -344,6 +357,7 @@ function renderJadwalTanggalPerawat(matches) {
 }
 
 function toggleTertundaPerawat(i, jadiTertunda) {
+  if (isPerawatRuangan()) return;
   var p = nursePasienListTerakhirTanggal[i];
   if (!p) return;
   setLoading('loadingKalPerawatDetail', true);
@@ -368,11 +382,13 @@ function toggleTertundaPerawat(i, jadiTertunda) {
 }
 
 function toggleUbahTanggalPerawat(i) {
+  if (isPerawatRuangan()) return;
   var el = document.getElementById('ubahTanggalPerawat' + i);
   el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
 function simpanUbahJadwalPerawat(i) {
+  if (isPerawatRuangan()) return;
   var p = nursePasienListTerakhirTanggal[i];
   if (!p) return;
   var iso = document.getElementById('tanggalBaruPerawat' + i).value;
@@ -414,6 +430,7 @@ function simpanUbahJadwalPerawat(i) {
 }
 
 function hapusJadwalPerawatDariKalender(i) {
+  if (isPerawatRuangan()) return;
   var p = nursePasienListTerakhirTanggal[i];
   if (!p) return;
   var konfirmasi = window.confirm('Yakin mau menghapus jadwal ' + p.nama + ' (Siklus ' + p.siklus + ')?\n\nSeluruh rentang hari (H1-H' + p.lamaHari + ') untuk siklus ini akan terhapus. Tindakan ini tidak bisa dibatalkan.');
@@ -577,7 +594,7 @@ function muatRiwayatPasienDetailPerawat(nama) {
 function renderEditDataPasienPerawat(data) {
   var container = document.getElementById('editDataPasienRiwayatPerawat');
   if (!container) return;
-  if (!data) { container.innerHTML = ''; return; }
+  if (!data || isPerawatRuangan()) { container.innerHTML = ''; return; }
 
   var html = '<div class="card" id="editDataPasienForm" style="display:none;">';
   html += '<div class="nama" style="font-size:14px; margin-bottom:8px;">Edit Data Pasien</div>';
@@ -603,6 +620,7 @@ function toggleEditDataPasienPerawat() {
 }
 
 function simpanEditDataPasienPerawat() {
+  if (isPerawatRuangan()) return;
   if (!nursePasienAktifData) return;
   var namaBaru = document.getElementById('editPasienNama').value.trim();
   var noRmBaru = document.getElementById('editPasienNoRm').value.trim();
@@ -641,6 +659,7 @@ function renderRiwayatPerawat(nama, list) {
     (info.diagnosa ? (escapeHtml(info.diagnosa) + ' &middot; ') : '') +
     (info.dpjp ? ('DPJP: ' + escapeHtml(info.dpjp)) : '');
 
+  var bolehEdit = !isPerawatRuangan();
   var html = '';
   list.forEach(function (item, i) {
     var isTerakhir = (i === list.length - 1);
@@ -659,23 +678,25 @@ function renderRiwayatPerawat(nama, list) {
         (item.catatanVerifikasi ? (': ' + escapeHtml(item.catatanVerifikasi)) : '.') + '</div>';
     }
 
-    html += '<div style="display:flex; gap:6px; margin-top:8px;">';
-    html += renderIkonBtn('ti-pencil', 'Ubah Jadwal', 'btn-accent', 'toggleUbahTanggalRiwayatPerawat(' + i + ')', 'flex:1;');
-    html += renderIkonBtn('ti-trash', 'Hapus Jadwal', 'btn-danger', 'hapusJadwalRiwayatPerawat(' + i + ')', 'flex:1;');
-    html += '</div>';
+    if (bolehEdit) {
+      html += '<div style="display:flex; gap:6px; margin-top:8px;">';
+      html += renderIkonBtn('ti-pencil', 'Ubah Jadwal', 'btn-accent', 'toggleUbahTanggalRiwayatPerawat(' + i + ')', 'flex:1;');
+      html += renderIkonBtn('ti-trash', 'Hapus Jadwal', 'btn-danger', 'hapusJadwalRiwayatPerawat(' + i + ')', 'flex:1;');
+      html += '</div>';
 
-    html += '<div id="ubahTanggalRiwayatPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
-    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Siklus</label>';
-    html += '<input type="text" id="siklusBaruRiwayatPerawat' + i + '" value="' + escapeHtml(item.siklus || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
-    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
-    html += '<input type="date" id="tanggalBaruRiwayatPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
-    html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
-    html += '<input type="number" id="lamaHariBaruRiwayatPerawat' + i + '" min="1" value="' + item.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
-    html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
-    html += '<input type="checkbox" id="geserBerikutnyaRiwayatPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
-    html += '</label>';
-    html += '<button type="button" onclick="simpanUbahTanggalRiwayatPerawat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan</button>';
-    html += '</div>';
+      html += '<div id="ubahTanggalRiwayatPerawat' + i + '" style="display:none; margin-top:8px; background:var(--surface-2); border-radius:8px; padding:8px;">';
+      html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Siklus</label>';
+      html += '<input type="text" id="siklusBaruRiwayatPerawat' + i + '" value="' + escapeHtml(item.siklus || '') + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+      html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Tanggal Mulai Baru</label>';
+      html += '<input type="date" id="tanggalBaruRiwayatPerawat' + i + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+      html += '<label style="font-size:11px; font-weight:600; display:block; margin-bottom:3px;">Lama Hari</label>';
+      html += '<input type="number" id="lamaHariBaruRiwayatPerawat' + i + '" min="1" value="' + item.lamaHari + '" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-strong); font-size:13px; margin-bottom:8px;">';
+      html += '<label style="display:flex; align-items:center; gap:6px; font-size:11px; margin-bottom:8px;">';
+      html += '<input type="checkbox" id="geserBerikutnyaRiwayatPerawat' + i + '" checked style="width:auto; margin:0;"> Geser juga jadwal berikutnya (selisih hari sama, sesuai interval)';
+      html += '</label>';
+      html += '<button type="button" onclick="simpanUbahTanggalRiwayatPerawat(' + i + ')" class="btn-primary" style="margin-bottom:0;">Simpan</button>';
+      html += '</div>';
+    }
 
     html += '</div>';
   });
@@ -684,11 +705,13 @@ function renderRiwayatPerawat(nama, list) {
 }
 
 function toggleUbahTanggalRiwayatPerawat(i) {
+  if (isPerawatRuangan()) return;
   var el = document.getElementById('ubahTanggalRiwayatPerawat' + i);
   el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
 function simpanUbahTanggalRiwayatPerawat(i) {
+  if (isPerawatRuangan()) return;
   var p = nursePasienListTerakhirRiwayat[i];
   if (!p) return;
   var siklusBaru = document.getElementById('siklusBaruRiwayatPerawat' + i).value.trim();
@@ -731,6 +754,7 @@ function simpanUbahTanggalRiwayatPerawat(i) {
 }
 
 function hapusJadwalRiwayatPerawat(i) {
+  if (isPerawatRuangan()) return;
   var p = nursePasienListTerakhirRiwayat[i];
   if (!p) return;
   var konfirmasi = window.confirm('Yakin mau menghapus jadwal (Siklus ' + p.siklus + ') mulai ' + p.tanggalMulai + '?\n\nTindakan ini tidak bisa dibatalkan.');
