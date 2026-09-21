@@ -4,7 +4,9 @@ var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_
 // AUTH
 // =====================================================================
 // Pemetaan ID login sederhana -> akun Supabase asli.
-// Tambahkan baris baru di sini kalau mau bikin ID lain.
+// Tambahkan baris baru di sini kalau mau bikin ID pendek yang lain.
+// (Kalau ID yang diketik mengandung "@", sistem akan langsung memakainya
+// sebagai email apa adanya, jadi tidak wajib didaftarkan di sini dulu.)
 var LOGIN_ID_MAP = {
   'depo': 'depo@klinik.local',
   'perawat': 'perawat@klinik.local',
@@ -24,7 +26,7 @@ function handleLogin() {
   errEl.textContent = '';
   if (!idInput || !password) { errEl.textContent = 'Isi ID dan kata sandi.'; return; }
 
-  var email = LOGIN_ID_MAP[idInput.toLowerCase()];
+  var email = LOGIN_ID_MAP[idInput.toLowerCase()] || (idInput.indexOf('@') !== -1 ? idInput : null);
   if (!email) { errEl.textContent = 'ID tidak dikenali.'; return; }
 
   document.getElementById('loginBtn').disabled = true;
