@@ -9,6 +9,12 @@ var LOGIN_ID_MAP = {
   'depo': 'depo@klinik.local',
   'perawat': 'perawat@klinik.local',
   'admin': 'admin@klinik.local'
+  // Contoh untuk role baru (lihat migrasi_verifikasi_ruangan.sql) —
+  // tambahkan satu baris per akun perawat ruangan/perawat kemo yang
+  // dibuat, ID di sini tinggal kata bebas, yang penting cocok dengan
+  // email akun tersebut di Supabase Auth:
+  // 'ruangmelati': 'perawatruangan1@klinik.local',
+  // 'kemo': 'perawatkemo@klinik.local'
 };
 
 function handleLogin() {
@@ -37,6 +43,7 @@ function handleLogout() {
     allSchedulesCache = null;
     nurseAllSchedulesCache = null;
     currentUserRole = null;
+    currentUserId = null;
     document.getElementById('appScreen').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'block';
   });
@@ -44,12 +51,23 @@ function handleLogout() {
 
 // =====================================================================
 // ROLE -> MENU
-// depo   : tab farmasi (kalender, kebutuhan obat, daftar pasien, tertunda,
-//          dashboard, cari obat, daftarkan pasien)
-// perawat: tab perawat (kalender perawat, list pasien kemoterapi perawat,
-//          daftarkan pasien perawat)
-// admin  : semua tab di atas sekaligus
+// depo            : tab farmasi (kalender, kebutuhan obat, daftar pasien,
+//                    tertunda, dashboard, cari obat, daftarkan pasien)
+// perawat         : role perawat "lama" — akses penuh ke semua tab
+//                    perawat, input langsung tampil di kalender, dan
+//                    juga bisa memverifikasi input perawat ruangan
+//                    (diperlakukan sama seperti perawat_kemo).
+// perawat_ruangan : perawat ruangan tertentu — bisa daftarkan pasien/
+//                    jadwal, TAPI inputnya tidak langsung tampil di
+//                    kalender perawat; harus diverifikasi dulu oleh
+//                    perawat_kemo (tab "Verifikasi Pasien" disembunyikan
+//                    untuk role ini).
+// perawat_kemo    : perawat ruangan kemo — sama seperti perawat, dan
+//                    khusus punya tab "Verifikasi Pasien" untuk
+//                    menyetujui/menolak input dari perawat_ruangan.
+// admin           : semua tab di atas sekaligus.
 // =====================================================================
+var NURSE_ROLES = ['perawat', 'perawat_ruangan', 'perawat_kemo'];
 var TAB_ROLES = {
   kalender: ['depo', 'admin'],
   rentang: ['depo', 'admin'],
@@ -58,9 +76,12 @@ var TAB_ROLES = {
   dashboard: ['depo', 'admin'],
   cariobat: ['depo', 'admin'],
   tambah: ['depo', 'admin'],
-  kalenderPerawat: ['perawat', 'admin'],
-  riwayatPerawat: ['perawat', 'admin'],
-  tambahPerawat: ['perawat', 'admin']
+  kalenderPerawat: NURSE_ROLES.concat(['admin']),
+  riwayatPerawat: NURSE_ROLES.concat(['admin']),
+  tambahPerawat: NURSE_ROLES.concat(['admin']),
+  // Verifikasi TIDAK termasuk 'perawat_ruangan' — role itu yang inputnya
+  // justru harus diverifikasi, bukan yang memverifikasi.
+  verifikasiPerawat: ['perawat', 'perawat_kemo', 'admin']
 };
 
 function applyRoleUI(role) {
@@ -71,7 +92,16 @@ function applyRoleUI(role) {
   var lblFarmasi = document.getElementById('sidebarLabelFarmasi');
   var lblPerawat = document.getElementById('sidebarLabelPerawat');
   if (lblFarmasi) lblFarmasi.style.display = (role === 'depo' || role === 'admin') ? '' : 'none';
-  if (lblPerawat) lblPerawat.style.display = (role === 'perawat' || role === 'admin') ? '' : 'none';
+  if (lblPerawat) lblPerawat.style.display = (NURSE_ROLES.indexOf(role) !== -1 || role === 'admin') ? '' : 'none';
+
+  // Catatan khusus untuk perawat_ruangan: input mereka butuh verifikasi
+  // dulu sebelum tampil di kalender. Elemen-elemen ini opsional di
+  // index.html (dicek dulu supaya tidak error kalau belum ada).
+  var isRuangan = (role === 'perawat_ruangan');
+  var catatanTambah = document.getElementById('tambahPerawatCatatanRuangan');
+  if (catatanTambah) catatanTambah.style.display = isRuangan ? 'block' : 'none';
+  var catatanRiwayat = document.getElementById('riwayatPerawatCatatanRuangan');
+  if (catatanRiwayat) catatanRiwayat.style.display = isRuangan ? 'block' : 'none';
 }
 
 function showApp(user) {
@@ -86,6 +116,7 @@ function showApp(user) {
       return;
     }
     currentUserRole = res.data.role;
+    currentUserId = user.id;
     applyRoleUI(currentUserRole);
 
     tanggalAktif = new Date();
@@ -94,7 +125,7 @@ function showApp(user) {
     var kalPerawatJump = document.getElementById('kalPerawatTanggalJump');
     if (kalPerawatJump) kalPerawatJump.value = toIsoDate(nurseTanggalAktif);
 
-    if (currentUserRole === 'perawat') {
+    if (NURSE_ROLES.indexOf(currentUserRole) !== -1) {
       switchTab('kalenderPerawat');
     } else {
       switchTab('kalender');
@@ -138,6 +169,7 @@ function switchTab(nama) {
   if (nama === 'kalenderPerawat') muatKalenderPerawat();
   if (nama === 'riwayatPerawat' && !nursePatientListDimuat) muatDaftarPasienPerawat();
   if (nama === 'tambahPerawat') muatDataUntukTambahPerawat();
+  if (nama === 'verifikasiPerawat') muatVerifikasiPerawat();
 }
 function capitalize(s) {
   if (s === 'cariobat') return 'CariObat';
