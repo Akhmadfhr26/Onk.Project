@@ -66,6 +66,7 @@
       <button class="tab-btn" id="tabBtnKalenderPerawat" onclick="switchTab('kalenderPerawat')"><i class="ti ti-calendar" aria-hidden="true"></i> Kalender</button>
       <button class="tab-btn" id="tabBtnRiwayatPerawat" onclick="switchTab('riwayatPerawat')"><i class="ti ti-clipboard-list" aria-hidden="true"></i> List Pasien Kemoterapi</button>
       <button class="tab-btn" id="tabBtnTambahPerawat" onclick="switchTab('tambahPerawat')"><i class="ti ti-user-plus" aria-hidden="true"></i> Daftarkan Pasien</button>
+      <button class="tab-btn" id="tabBtnVerifikasiPerawat" onclick="switchTab('verifikasiPerawat')"><i class="ti ti-shield-check" aria-hidden="true"></i> Verifikasi Pasien</button>
     </nav>
 
     <div class="sidebar-footer">
@@ -327,6 +328,9 @@
 
           <div class="card" style="margin-top:20px;">
             <div class="nama" style="font-size:14px;">Tambah Jadwal Baru</div>
+            <div id="riwayatPerawatCatatanRuangan" style="display:none; font-size:12px; background:var(--surface-2); border:1px solid var(--border-strong); border-radius:8px; padding:10px; margin:10px 0 4px;">
+              <i class="ti ti-info-circle" aria-hidden="true"></i> Jadwal baru yang Anda simpan di sini <strong>tidak langsung tampil</strong> di kalender perawat &mdash; perlu diverifikasi dulu oleh perawat ruangan kemo.
+            </div>
 
             <label class="field-label">Tanggal Mulai Kemo (Siklus Awal)</label>
             <input type="date" id="riwayatPerawatTambahTanggal">
@@ -356,6 +360,9 @@
 
       <!-- ===== TAB PERAWAT 3: DAFTARKAN PASIEN ===== -->
       <div id="tabTambahPerawat" style="display:none">
+        <div id="tambahPerawatCatatanRuangan" style="display:none; font-size:12px; background:var(--surface-2); border:1px solid var(--border-strong); border-radius:8px; padding:10px; margin-bottom:14px; color:var(--muted);">
+          <i class="ti ti-info-circle" aria-hidden="true"></i> Jadwal yang Anda input di sini <strong>tidak langsung muncul</strong> di kalender perawat &mdash; perlu diverifikasi dulu oleh perawat ruangan kemo.
+        </div>
         <label class="field-label">Nama Pasien</label>
         <input type="text" id="tambahPerawatNama" list="nursePatientDatalistTambah" placeholder="Ketik nama pasien (baru atau lama)..." autocomplete="off">
         <datalist id="nursePatientDatalistTambah"></datalist>
@@ -397,6 +404,16 @@
 
         <button class="btn-primary" id="tambahPerawatSubmitBtn" onclick="submitTambahPasienPerawat()" style="max-width:260px;">Simpan Jadwal</button>
         <div class="status-msg" id="tambahPerawatStatus"></div>
+      </div>
+
+      <!-- ===== TAB PERAWAT 4: VERIFIKASI PASIEN (khusus perawat ruangan kemo) ===== -->
+      <div id="tabVerifikasiPerawat" style="display:none">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+          Daftar input pasien/jadwal dari perawat ruangan yang belum tampil di kalender perawat dan menunggu diverifikasi.
+        </div>
+        <div id="loadingVerifikasiPerawat" class="loading-msg">Memuat...</div>
+        <div id="loadingVerifikasiPerawatSkeleton" class="skel-container" style="display:none;"></div>
+        <div id="verifikasiPerawatContainer"></div>
       </div>
 
     </div>
