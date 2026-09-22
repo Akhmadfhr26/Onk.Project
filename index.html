@@ -108,6 +108,17 @@
 
       <!-- ===== TAB 2: KEBUTUHAN OBAT (FARMASI) ===== -->
       <div id="tabRentang" style="display:none">
+
+        <!-- ===== TAMBAHAN: Cari Obat & Stok Saat Ini (langsung tampil, mirip Tab Cari Obat) ===== -->
+        <div class="card" style="margin-bottom:20px;">
+          <div class="nama" style="font-size:14px; margin-bottom:8px;">Cari Obat &amp; Stok Saat Ini</div>
+          <input type="text" id="kebutuhanObatSearchInput" placeholder="Ketik nama obat..." autocomplete="off">
+          <div id="loadingKebutuhanObatSearch" class="loading-msg" style="display:none;">Memuat...</div>
+          <div id="loadingKebutuhanObatSearchSkeleton" class="skel-container" style="display:none;"></div>
+          <div id="daftarObatKebutuhanSearch"></div>
+        </div>
+        <!-- ===== END TAMBAHAN ===== -->
+
         <div class="card" style="margin-bottom:20px;">
           <div class="nama" style="font-size:14px;">Update Stok</div>
           <div style="font-size:12px; color:var(--muted); margin:-4px 0 10px;">
