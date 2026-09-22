@@ -24,13 +24,15 @@
 // bergantung pada view v_patient_summary), sehingga independen dari
 // logika "Berpotensi Belum Follow-up" yang sudah ada sebelumnya.
 //
-// UPDATE 3: ditambahkan kotak "Cari Obat & Stok Saat Ini" di TAB 2:
-// Kebutuhan Obat — mengikuti pola yang sama seperti TAB 6: Cari Obat
-// (langsung menampilkan semua nama obat + total stok saat ini begitu
-// diketik, tanpa perlu isi rentang tanggal / klik tombol apa pun).
-// Lihat state kebutuhanObatAllList dan fungsi
-// muatDaftarObatStokKebutuhan() / renderDaftarObatKebutuhanSearch() di
-// bawah. Tidak mengubah logika muatKebutuhanRentang() yang sudah ada.
+// UPDATE 3: ditambahkan "hint stok otomatis" di TAB 2: Kebutuhan Obat.
+// Begitu nama obat diketik/dipilih di baris "Update Stok" ATAU
+// "Input Pemakaian Obat", langsung muncul teks kecil di bawah baris
+// tsb berisi "Stok saat ini: X" untuk obat yang namanya cocok (case-
+// insensitive) dengan data di stock_entries. Tidak ada kotak/kolom
+// baru — hanya teks bantu di bawah kolom nama obat yang sudah ada.
+// Lihat: stokLookupMapCache, muatStokLookupMap(), formatStokHintTeks(),
+// updateStokHintElement(), serta pemanggilannya di renderStokRowsTable()
+// dan renderPemakaianRowsTable().
 // =====================================================================
 
 // ---- state (depo/farmasi) ----
@@ -59,8 +61,8 @@ var riwayatPasienAktif = null;
 var pasienListTerakhirRiwayat = [];
 var currentObatListRiwayat = [];
 
-// ---- state khusus kotak "Cari Obat & Stok Saat Ini" di TAB 2 (farmasi) ----
-var kebutuhanObatAllList = [];
+// ---- state khusus hint stok otomatis di TAB 2 (Update Stok & Pemakaian) ----
+var stokLookupMapCache = null; // { 'nama obat (lowercase)': totalStokSaatIni }
 
 // cache: seluruh jadwal farmasi (schedules + items + nama pasien)
 var allSchedulesCache = null;
@@ -100,6 +102,7 @@ function loadAllSchedules(forceReload) {
 function invalidateCacheAndReload() {
   allSchedulesCache = null;
   daftarNamaObatSharedCache = null;
+  stokLookupMapCache = null;
   patientListDimuat = false;
   tertundaDimuat = false;
   dashboardDimuat = false;
@@ -141,6 +144,59 @@ function isiDatalistObat(idDatalist) {
       dl.appendChild(opt);
     });
   });
+}
+
+// =====================================================================
+// TAMBAHAN: HINT STOK OTOMATIS (TAB 2 — Update Stok & Input Pemakaian)
+// =====================================================================
+// muatStokLookupMap(): memuat total stok tiap obat dari stock_entries,
+// dijadikan map { 'nama obat lowercase': totalJumlah } supaya lookup-nya
+// instan tiap kali user mengetik di kolom "Nama obat". Di-cache seperti
+// cache lain di file ini, dan diinvalidasi lewat invalidateCacheAndReload().
+function muatStokLookupMap(forceReload) {
+  if (stokLookupMapCache && !forceReload) return Promise.resolve(stokLookupMapCache);
+  return sb.from('stock_entries').select('obat, jumlah').then(function (res) {
+    var map = {};
+    if (!res.error && res.data) {
+      res.data.forEach(function (row) {
+        var key = (row.obat || '').trim().toLowerCase();
+        if (!key) return;
+        map[key] = (map[key] || 0) + Number(row.jumlah || 0);
+      });
+    }
+    stokLookupMapCache = map;
+    return map;
+  }).catch(function () {
+    // kalau gagal memuat, jangan sampai mengganggu form — anggap kosong
+    stokLookupMapCache = stokLookupMapCache || {};
+    return stokLookupMapCache;
+  });
+}
+
+// updateStokHintElement(): mengisi teks bantu di bawah satu baris input
+// obat berdasarkan nilai yang sedang diketik/dipilih. Kalau cache stok
+// belum ada, dimuat dulu lalu otomatis dipanggil ulang.
+function updateStokHintElement(elId, obatValue) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var nama = (obatValue || '').toString().trim();
+  if (!nama) { el.innerHTML = ''; return; }
+
+  if (!stokLookupMapCache) {
+    el.innerHTML = '<span style="color:var(--muted);">Memuat info stok...</span>';
+    muatStokLookupMap().then(function () { updateStokHintElement(elId, obatValue); });
+    return;
+  }
+
+  var key = nama.toLowerCase();
+  var adaData = Object.prototype.hasOwnProperty.call(stokLookupMapCache, key);
+  var stokNilai = adaData ? stokLookupMapCache[key] : 0;
+
+  if (adaData) {
+    el.innerHTML = '<i class="ti ti-info-circle" aria-hidden="true"></i> Stok saat ini: <strong>' + stokNilai + '</strong>';
+  } else {
+    el.innerHTML = '<i class="ti ti-info-circle" aria-hidden="true"></i> Belum ada data stok untuk obat ini (dianggap 0).';
+  }
 }
 
 // =====================================================================
@@ -437,74 +493,6 @@ function hapusJadwalTanggal(i) {
 // =====================================================================
 // TAB 2: KEBUTUHAN OBAT (FARMASI)
 // =====================================================================
-
-// ---------------------------------------------------------------------
-// TAMBAHAN: Cari Obat & Stok Saat Ini — mirip pola di TAB 6: Cari Obat.
-// Begitu diketik di #kebutuhanObatSearchInput, langsung difilter dari
-// kebutuhanObatAllList (nama obat + total stok saat ini), tanpa perlu
-// mengisi rentang tanggal atau klik tombol apa pun. Data dimuat sekali
-// di bawah (lihat pemanggilan di akhir bagian TAB 2 ini) dan di-refresh
-// ulang tiap kali stok/pemakaian diupdate lewat submitUpdateStok() /
-// submitPemakaianObat().
-// ---------------------------------------------------------------------
-function muatDaftarObatStokKebutuhan() {
-  setLoading('loadingKebutuhanObatSearch', true, 'list');
-  document.getElementById('daftarObatKebutuhanSearch').innerHTML = '';
-
-  Promise.all([
-    muatDaftarNamaObat(),
-    sb.from('stock_entries').select('obat, jumlah')
-  ]).then(function (results) {
-    var namaList = results[0];
-    var stokRes = results[1];
-    setLoading('loadingKebutuhanObatSearch', false);
-
-    var stokMap = {};
-    if (stokRes && !stokRes.error && stokRes.data) {
-      stokRes.data.forEach(function (row) {
-        var key = (row.obat || '').toLowerCase();
-        stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
-      });
-    }
-
-    kebutuhanObatAllList = namaList.map(function (nama) {
-      return { obat: nama, stok: stokMap[nama.toLowerCase()] || 0 };
-    });
-
-    renderDaftarObatKebutuhanSearch(document.getElementById('kebutuhanObatSearchInput').value);
-  }).catch(function (err) {
-    setLoading('loadingKebutuhanObatSearch', false);
-    document.getElementById('daftarObatKebutuhanSearch').innerHTML = 'Gagal memuat: ' + escapeHtml(err.message);
-  });
-}
-
-function renderDaftarObatKebutuhanSearch(filter) {
-  var container = document.getElementById('daftarObatKebutuhanSearch');
-  if (!container) return;
-  var f = (filter || '').trim().toLowerCase();
-  var filtered = kebutuhanObatAllList.filter(function (o) { return o.obat.toLowerCase().indexOf(f) !== -1; });
-
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada obat yang cocok.</div>';
-    return;
-  }
-
-  var html = '<div class="pasien-list-card">';
-  filtered.forEach(function (o) {
-    html += '<div class="pasien-item"><span><i class="ti ti-pill" aria-hidden="true" style="color:var(--accent); margin-right:6px;"></i>' + escapeHtml(o.obat) + '</span>' +
-      '<span class="obat-jumlah" style="font-size:13px;">Stok ' + o.stok + '</span></div>';
-  });
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-document.getElementById('kebutuhanObatSearchInput').addEventListener('input', function () {
-  renderDaftarObatKebutuhanSearch(this.value);
-});
-// ---------------------------------------------------------------------
-// END TAMBAHAN
-// ---------------------------------------------------------------------
-
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
   var isoAkhir = document.getElementById('rentangAkhir').value;
@@ -607,6 +595,10 @@ function renderRentang(detail) {
   document.getElementById('contentRentang').innerHTML = html;
 }
 
+// ---------------------------------------------------------------------
+// Update Stok — sekarang tiap baris menampilkan hint "Stok saat ini: X"
+// di bawah kolom Nama obat, otomatis diperbarui saat diketik/dipilih.
+// ---------------------------------------------------------------------
 function tambahBarisStokKosong() {
   currentStokRows.push({ obat: '', jumlah: '' });
   renderStokRowsTable();
@@ -623,7 +615,8 @@ function renderStokRowsTable() {
     html += '<div class="obat-row">' +
       '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
       '<input type="number" data-i="' + i + '" data-f="jumlah" placeholder="Stok saat ini" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
-      '<button type="button" onclick="hapusBarisStok(' + i + ')">×</button></div>';
+      '<button type="button" onclick="hapusBarisStok(' + i + ')">×</button></div>' +
+      '<div class="stok-hint-baris" id="stokHintUpdateStok' + i + '" style="font-size:11px; color:var(--muted); margin:-6px 0 10px 2px;"></div>';
   });
   container.innerHTML = html;
   container.querySelectorAll('.obat-row input').forEach(function (inp) {
@@ -631,9 +624,14 @@ function renderStokRowsTable() {
       var i = parseInt(this.getAttribute('data-i'), 10);
       var f = this.getAttribute('data-f');
       currentStokRows[i][f] = this.value;
+      if (f === 'obat') updateStokHintElement('stokHintUpdateStok' + i, this.value);
     };
     inp.addEventListener('input', handler);
     inp.addEventListener('change', handler);
+  });
+  // isi hint awal untuk baris yang sudah punya nilai (mis. saat form direset ulang)
+  currentStokRows.forEach(function (item, i) {
+    updateStokHintElement('stokHintUpdateStok' + i, item.obat);
   });
 }
 
@@ -675,7 +673,10 @@ function submitUpdateStok() {
     renderStokRowsTable();
     invalidateCacheAndReload();
     isiDatalistObat('daftarObatDatalistTambah');
-    muatDaftarObatStokKebutuhan();
+    muatStokLookupMap(true).then(function () {
+      renderStokRowsTable();
+      renderPemakaianRowsTable();
+    });
     if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
   }).catch(function (err) {
     document.getElementById('stokMasukSubmitBtn').disabled = false;
@@ -686,6 +687,8 @@ function submitUpdateStok() {
 
 // =====================================================================
 // TAMBAHAN: INPUT PEMAKAIAN OBAT (mengurangi stok) — TAB 2: KEBUTUHAN OBAT
+// Sama seperti Update Stok, tiap baris juga menampilkan hint stok
+// otomatis di bawah kolom Nama obat.
 // =====================================================================
 function tambahBarisPemakaianKosong() {
   currentPemakaianRows.push({ obat: '', jumlah: '' });
@@ -705,7 +708,8 @@ function renderPemakaianRowsTable() {
     html += '<div class="obat-row">' +
       '<input list="daftarObatDatalistTambah" data-i="' + i + '" data-f="obat" placeholder="Nama obat" value="' + escapeHtml(item.obat || '') + '">' +
       '<input type="number" min="0" data-i="' + i + '" data-f="jumlah" placeholder="Jumlah dipakai" value="' + escapeHtml(item.jumlah != null ? String(item.jumlah) : '') + '">' +
-      '<button type="button" onclick="hapusBarisPemakaian(' + i + ')">×</button></div>';
+      '<button type="button" onclick="hapusBarisPemakaian(' + i + ')">×</button></div>' +
+      '<div class="stok-hint-baris" id="stokHintPemakaian' + i + '" style="font-size:11px; color:var(--muted); margin:-6px 0 10px 2px;"></div>';
   });
   container.innerHTML = html;
   container.querySelectorAll('.obat-row input').forEach(function (inp) {
@@ -713,9 +717,14 @@ function renderPemakaianRowsTable() {
       var i = parseInt(this.getAttribute('data-i'), 10);
       var f = this.getAttribute('data-f');
       currentPemakaianRows[i][f] = this.value;
+      if (f === 'obat') updateStokHintElement('stokHintPemakaian' + i, this.value);
     };
     inp.addEventListener('input', handler);
     inp.addEventListener('change', handler);
+  });
+  // isi hint awal untuk baris yang sudah punya nilai
+  currentPemakaianRows.forEach(function (item, i) {
+    updateStokHintElement('stokHintPemakaian' + i, item.obat);
   });
 }
 
@@ -800,7 +809,10 @@ function submitPemakaianObat() {
     renderPemakaianRowsTable();
     invalidateCacheAndReload();
     isiDatalistObat('daftarObatDatalistTambah');
-    muatDaftarObatStokKebutuhan();
+    muatStokLookupMap(true).then(function () {
+      renderStokRowsTable();
+      renderPemakaianRowsTable();
+    });
     if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
   }).catch(function (err) {
     document.getElementById('pemakaianSubmitBtn').disabled = false;
@@ -2010,10 +2022,8 @@ function submitTambahJadwal() {
 }
 
 // =====================================================================
-// TAMBAHAN: muat daftar "Cari Obat & Stok Saat Ini" (Tab 2) begitu
-// halaman selesai diparse — supaya langsung terisi tanpa harus
-// menunggu app.js memanggil sesuatu saat tab "Kebutuhan Obat" dibuka.
-// Aman dipanggil sedini ini karena hanya mengisi konten di dalam div
-// tab yang statusnya display:none (tidak mengganggu tab lain).
+// TAMBAHAN: muat map lookup stok begitu halaman selesai diparse, supaya
+// hint stok di baris Update Stok / Input Pemakaian sudah siap dipakai
+// tanpa jeda saat pertama kali tab "Kebutuhan Obat" dibuka.
 // =====================================================================
-muatDaftarObatStokKebutuhan();
+muatStokLookupMap();
