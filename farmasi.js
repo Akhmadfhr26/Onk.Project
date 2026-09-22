@@ -23,6 +23,14 @@
 // dihitung dari data schedules + patients.interval_hari (tidak
 // bergantung pada view v_patient_summary), sehingga independen dari
 // logika "Berpotensi Belum Follow-up" yang sudah ada sebelumnya.
+//
+// UPDATE 3: ditambahkan kotak "Cari Obat & Stok Saat Ini" di TAB 2:
+// Kebutuhan Obat — mengikuti pola yang sama seperti TAB 6: Cari Obat
+// (langsung menampilkan semua nama obat + total stok saat ini begitu
+// diketik, tanpa perlu isi rentang tanggal / klik tombol apa pun).
+// Lihat state kebutuhanObatAllList dan fungsi
+// muatDaftarObatStokKebutuhan() / renderDaftarObatKebutuhanSearch() di
+// bawah. Tidak mengubah logika muatKebutuhanRentang() yang sudah ada.
 // =====================================================================
 
 // ---- state (depo/farmasi) ----
@@ -50,6 +58,9 @@ var allPatientNames = [];
 var riwayatPasienAktif = null;
 var pasienListTerakhirRiwayat = [];
 var currentObatListRiwayat = [];
+
+// ---- state khusus kotak "Cari Obat & Stok Saat Ini" di TAB 2 (farmasi) ----
+var kebutuhanObatAllList = [];
 
 // cache: seluruh jadwal farmasi (schedules + items + nama pasien)
 var allSchedulesCache = null;
@@ -426,6 +437,74 @@ function hapusJadwalTanggal(i) {
 // =====================================================================
 // TAB 2: KEBUTUHAN OBAT (FARMASI)
 // =====================================================================
+
+// ---------------------------------------------------------------------
+// TAMBAHAN: Cari Obat & Stok Saat Ini — mirip pola di TAB 6: Cari Obat.
+// Begitu diketik di #kebutuhanObatSearchInput, langsung difilter dari
+// kebutuhanObatAllList (nama obat + total stok saat ini), tanpa perlu
+// mengisi rentang tanggal atau klik tombol apa pun. Data dimuat sekali
+// di bawah (lihat pemanggilan di akhir bagian TAB 2 ini) dan di-refresh
+// ulang tiap kali stok/pemakaian diupdate lewat submitUpdateStok() /
+// submitPemakaianObat().
+// ---------------------------------------------------------------------
+function muatDaftarObatStokKebutuhan() {
+  setLoading('loadingKebutuhanObatSearch', true, 'list');
+  document.getElementById('daftarObatKebutuhanSearch').innerHTML = '';
+
+  Promise.all([
+    muatDaftarNamaObat(),
+    sb.from('stock_entries').select('obat, jumlah')
+  ]).then(function (results) {
+    var namaList = results[0];
+    var stokRes = results[1];
+    setLoading('loadingKebutuhanObatSearch', false);
+
+    var stokMap = {};
+    if (stokRes && !stokRes.error && stokRes.data) {
+      stokRes.data.forEach(function (row) {
+        var key = (row.obat || '').toLowerCase();
+        stokMap[key] = (stokMap[key] || 0) + Number(row.jumlah || 0);
+      });
+    }
+
+    kebutuhanObatAllList = namaList.map(function (nama) {
+      return { obat: nama, stok: stokMap[nama.toLowerCase()] || 0 };
+    });
+
+    renderDaftarObatKebutuhanSearch(document.getElementById('kebutuhanObatSearchInput').value);
+  }).catch(function (err) {
+    setLoading('loadingKebutuhanObatSearch', false);
+    document.getElementById('daftarObatKebutuhanSearch').innerHTML = 'Gagal memuat: ' + escapeHtml(err.message);
+  });
+}
+
+function renderDaftarObatKebutuhanSearch(filter) {
+  var container = document.getElementById('daftarObatKebutuhanSearch');
+  if (!container) return;
+  var f = (filter || '').trim().toLowerCase();
+  var filtered = kebutuhanObatAllList.filter(function (o) { return o.obat.toLowerCase().indexOf(f) !== -1; });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty"><i class="ti ti-folder" aria-hidden="true"></i>Tidak ada obat yang cocok.</div>';
+    return;
+  }
+
+  var html = '<div class="pasien-list-card">';
+  filtered.forEach(function (o) {
+    html += '<div class="pasien-item"><span><i class="ti ti-pill" aria-hidden="true" style="color:var(--accent); margin-right:6px;"></i>' + escapeHtml(o.obat) + '</span>' +
+      '<span class="obat-jumlah" style="font-size:13px;">Stok ' + o.stok + '</span></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+document.getElementById('kebutuhanObatSearchInput').addEventListener('input', function () {
+  renderDaftarObatKebutuhanSearch(this.value);
+});
+// ---------------------------------------------------------------------
+// END TAMBAHAN
+// ---------------------------------------------------------------------
+
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
   var isoAkhir = document.getElementById('rentangAkhir').value;
@@ -596,6 +675,7 @@ function submitUpdateStok() {
     renderStokRowsTable();
     invalidateCacheAndReload();
     isiDatalistObat('daftarObatDatalistTambah');
+    muatDaftarObatStokKebutuhan();
     if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
   }).catch(function (err) {
     document.getElementById('stokMasukSubmitBtn').disabled = false;
@@ -720,6 +800,7 @@ function submitPemakaianObat() {
     renderPemakaianRowsTable();
     invalidateCacheAndReload();
     isiDatalistObat('daftarObatDatalistTambah');
+    muatDaftarObatStokKebutuhan();
     if (document.getElementById('rentangMulai').value && document.getElementById('rentangAkhir').value) muatKebutuhanRentang();
   }).catch(function (err) {
     document.getElementById('pemakaianSubmitBtn').disabled = false;
@@ -1927,3 +2008,12 @@ function submitTambahJadwal() {
     statusEl.textContent = 'Gagal: ' + err.message;
   });
 }
+
+// =====================================================================
+// TAMBAHAN: muat daftar "Cari Obat & Stok Saat Ini" (Tab 2) begitu
+// halaman selesai diparse — supaya langsung terisi tanpa harus
+// menunggu app.js memanggil sesuatu saat tab "Kebutuhan Obat" dibuka.
+// Aman dipanggil sedini ini karena hanya mengisi konten di dalam div
+// tab yang statusnya display:none (tidak mengganggu tab lain).
+// =====================================================================
+muatDaftarObatStokKebutuhan();
