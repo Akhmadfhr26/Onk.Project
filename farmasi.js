@@ -604,9 +604,10 @@ function renderRentang(detail) {
 // EXPORT EXCEL — TAB 2: KEBUTUHAN OBAT
 // Mengambil hasil rekap terakhir (lastRentangDetail) yang sudah dihitung
 // oleh muatKebutuhanRentang() untuk rentang tanggal yang dipilih user,
-// lalu men-generate file .xlsx (pakai library SheetJS / XLSX) berisi:
-// nama obat, total kebutuhan, stok saat ini, selisih, status, dan daftar
-// pasien pemakai. Nama file otomatis memuat rentang tanggal yang dipilih.
+// lalu men-generate file .xlsx (pakai library SheetJS / XLSX) berisi
+// HANYA obat yang stoknya kurang (perlu dipesan), dengan kolom:
+// nama obat, stok saat ini, kebutuhan, dan jumlah yang harus dipesan.
+// Nama file otomatis memuat rentang tanggal yang dipilih.
 // ---------------------------------------------------------------------
 function exportKebutuhanRentangExcel() {
   if (!lastRentangDetail || !lastRentangDetail.items || lastRentangDetail.items.length === 0) {
@@ -619,22 +620,23 @@ function exportKebutuhanRentangExcel() {
   }
 
   var detail = lastRentangDetail;
-  var header = ['Nama Obat', 'Total Kebutuhan', 'Stok Saat Ini', 'Selisih', 'Status', 'Dipakai Oleh (Pasien)'];
-  var rows = detail.items.map(function (item) {
-    return [
-      item.obat,
-      item.totalJumlah,
-      item.stok,
-      item.selisih,
-      item.selisih < 0 ? 'KURANG - segera pesan' : 'Cukup',
-      item.pasienList.join(', ')
-    ];
-  });
+  var perluDipesan = detail.items.filter(function (item) { return item.selisih < 0; });
+
+  if (perluDipesan.length === 0) {
+    alert('Tidak ada obat yang perlu dipesan untuk periode ' + detail.tanggalMulai + ' s/d ' + detail.tanggalAkhir + ' (semua stok mencukupi).');
+    return;
+  }
+
+  var header = ['Nama Obat', 'Stok Saat Ini', 'Kebutuhan', 'Jumlah Harus Dipesan'];
+  var rows = perluDipesan
+    .sort(function (a, b) { return (a.stok - a.totalJumlah) - (b.stok - b.totalJumlah); }) // paling kurang di atas
+    .map(function (item) {
+      return [item.obat, item.stok, item.totalJumlah, Math.abs(item.selisih)];
+    });
 
   var aoa = [
-    ['Rekap Kebutuhan Obat'],
+    ['Daftar Obat Perlu Dipesan'],
     ['Periode: ' + detail.tanggalMulai + ' s/d ' + detail.tanggalAkhir],
-    ['Total Pasien: ' + detail.totalPasien, 'Total Hari Ada Jadwal: ' + detail.totalHariAdaJadwal],
     [],
     header
   ].concat(rows);
@@ -642,17 +644,15 @@ function exportKebutuhanRentangExcel() {
   var ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [
     { wch: 28 }, // Nama Obat
-    { wch: 16 }, // Total Kebutuhan
     { wch: 14 }, // Stok Saat Ini
-    { wch: 10 }, // Selisih
-    { wch: 20 }, // Status
-    { wch: 40 }  // Dipakai Oleh
+    { wch: 14 }, // Kebutuhan
+    { wch: 20 }  // Jumlah Harus Dipesan
   ];
 
   var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Kebutuhan Obat');
+  XLSX.utils.book_append_sheet(wb, ws, 'Perlu Dipesan');
 
-  var namaFile = 'Kebutuhan_Obat_' + detail.isoMulai + '_sampai_' + detail.isoAkhir + '.xlsx';
+  var namaFile = 'Obat_Perlu_Dipesan_' + detail.isoMulai + '_sampai_' + detail.isoAkhir + '.xlsx';
   XLSX.writeFile(wb, namaFile);
 }
 
