@@ -493,6 +493,8 @@ function hapusJadwalTanggal(i) {
 // =====================================================================
 // TAB 2: KEBUTUHAN OBAT (FARMASI)
 // =====================================================================
+var lastRentangDetail = null; // simpan hasil rekap terakhir supaya bisa di-export ke Excel
+
 function muatKebutuhanRentang() {
   var isoMulai = document.getElementById('rentangMulai').value;
   var isoAkhir = document.getElementById('rentangAkhir').value;
@@ -503,6 +505,7 @@ function muatKebutuhanRentang() {
   setLoading('loadingRentang', true, 'tabel');
   document.getElementById('ringkasanRentang').innerHTML = '';
   document.getElementById('contentRentang').innerHTML = '';
+  lastRentangDetail = null;
 
   Promise.all([
     loadAllSchedules(),
@@ -558,6 +561,7 @@ function muatKebutuhanRentang() {
     }).sort(function (a, b) { return a.obat.localeCompare(b.obat); });
 
     renderRentang({
+      isoMulai: isoMulai, isoAkhir: isoAkhir,
       tanggalMulai: formatDDMMYYYY(mulai), tanggalAkhir: formatDDMMYYYY(akhir),
       items: items, totalPasien: Object.keys(pasienSet).length, totalHariAdaJadwal: Object.keys(tanggalSet).length
     });
@@ -568,6 +572,7 @@ function muatKebutuhanRentang() {
 }
 
 function renderRentang(detail) {
+  lastRentangDetail = detail; // simpan supaya tombol Export Excel bisa memakainya
   if (!detail.items || detail.items.length === 0) {
     document.getElementById('ringkasanRentang').innerHTML = 'Tidak ada jadwal kemoterapi dari ' + detail.tanggalMulai + ' sampai ' + detail.tanggalAkhir + '.';
     return;
@@ -593,6 +598,62 @@ function renderRentang(detail) {
   });
   html += '</div>';
   document.getElementById('contentRentang').innerHTML = html;
+}
+
+// ---------------------------------------------------------------------
+// EXPORT EXCEL — TAB 2: KEBUTUHAN OBAT
+// Mengambil hasil rekap terakhir (lastRentangDetail) yang sudah dihitung
+// oleh muatKebutuhanRentang() untuk rentang tanggal yang dipilih user,
+// lalu men-generate file .xlsx (pakai library SheetJS / XLSX) berisi:
+// nama obat, total kebutuhan, stok saat ini, selisih, status, dan daftar
+// pasien pemakai. Nama file otomatis memuat rentang tanggal yang dipilih.
+// ---------------------------------------------------------------------
+function exportKebutuhanRentangExcel() {
+  if (!lastRentangDetail || !lastRentangDetail.items || lastRentangDetail.items.length === 0) {
+    alert('Belum ada data rekap untuk di-export. Klik "Tampilkan Rekap" dulu untuk rentang tanggal yang diinginkan.');
+    return;
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('Gagal export: library Excel (XLSX) belum termuat. Pastikan koneksi internet aktif lalu muat ulang halaman.');
+    return;
+  }
+
+  var detail = lastRentangDetail;
+  var header = ['Nama Obat', 'Total Kebutuhan', 'Stok Saat Ini', 'Selisih', 'Status', 'Dipakai Oleh (Pasien)'];
+  var rows = detail.items.map(function (item) {
+    return [
+      item.obat,
+      item.totalJumlah,
+      item.stok,
+      item.selisih,
+      item.selisih < 0 ? 'KURANG - segera pesan' : 'Cukup',
+      item.pasienList.join(', ')
+    ];
+  });
+
+  var aoa = [
+    ['Rekap Kebutuhan Obat'],
+    ['Periode: ' + detail.tanggalMulai + ' s/d ' + detail.tanggalAkhir],
+    ['Total Pasien: ' + detail.totalPasien, 'Total Hari Ada Jadwal: ' + detail.totalHariAdaJadwal],
+    [],
+    header
+  ].concat(rows);
+
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [
+    { wch: 28 }, // Nama Obat
+    { wch: 16 }, // Total Kebutuhan
+    { wch: 14 }, // Stok Saat Ini
+    { wch: 10 }, // Selisih
+    { wch: 20 }, // Status
+    { wch: 40 }  // Dipakai Oleh
+  ];
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Kebutuhan Obat');
+
+  var namaFile = 'Kebutuhan_Obat_' + detail.isoMulai + '_sampai_' + detail.isoAkhir + '.xlsx';
+  XLSX.writeFile(wb, namaFile);
 }
 
 // ---------------------------------------------------------------------
