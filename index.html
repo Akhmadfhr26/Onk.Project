@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.46.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -149,7 +150,10 @@
             <input type="date" id="rentangAkhir" style="margin-bottom:12px;">
           </div>
         </div>
-        <button onclick="muatKebutuhanRentang()" class="btn-primary" style="margin-bottom:16px; max-width:260px;">Tampilkan Rekap</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+          <button onclick="muatKebutuhanRentang()" class="btn-primary" style="max-width:260px; margin-bottom:0;">Tampilkan Rekap</button>
+          <button onclick="exportKebutuhanRentangExcel()" class="btn-secondary" id="btnExportRentang" style="max-width:260px; margin-bottom:0;"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> Export Excel</button>
+        </div>
 
         <div id="loadingRentang" class="loading-msg" style="display:none;">Memuat...</div>
         <div id="loadingRentangSkeleton" class="skel-container" style="display:none;"></div>
