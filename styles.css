@@ -443,19 +443,64 @@
   }
   .card-pasien-row .nama-info { margin: 0; }
 
-  /* Collapse back to mobile layout on narrow viewports */
+  /* =========================================================
+     TAMPILAN HP — DIBUAT SAMA DENGAN DESKTOP
+     Dulu, di layar sempit sidebar dipindah ke atas dan tombol menu
+     jadi grid yang memanjang. Sekarang struktur desktop dipertahankan:
+     sidebar tetap di kiri, konten di kanan, warna/kartu/urutan menu
+     sama. Yang berubah hanya ukuran: sidebar jadi ramping (ikon di
+     atas, teks kecil di bawahnya), padding & font menyesuaikan.
+     ========================================================= */
   @media (max-width: 860px) {
-    .app-shell { flex-direction: column; }
+    .app-shell { flex-direction: row; }
+
     .sidebar {
-      width: 100%; height: auto; position: static; border-right: none;
-      border-bottom: 1px solid var(--border); padding: 16px;
+      width: 84px; height: 100vh; position: sticky; top: 0;
+      border-right: 1px solid var(--border); border-bottom: none;
+      padding: 12px 6px;
     }
-    .sidebar .header { text-align: center; }
-    .tabs { flex-direction: row; flex-wrap: wrap; gap: 8px; }
-    .tab-btn { min-width: 30%; flex: 1; justify-content: center; }
-    .sidebar-footer { margin-top: 12px; }
-    .main-content { padding: 20px 16px 60px; }
-    .theme-toggle-row { justify-content: center; }
+    .sidebar .header { text-align: center; margin-bottom: 12px; }
+    .sidebar .header h1 { font-size: 10px; flex-direction: column; gap: 2px; line-height: 1.2; }
+    .sidebar .header h1 i { font-size: 20px; }
+    .sidebar .header-pulse { display: none; }
+
+    .theme-toggle-row { justify-content: center; margin-bottom: 8px; }
+    .theme-toggle-btn { padding: 8px; }
+    #themeToggleLabel { display: none; }
+
+    .tabs { flex-direction: column; flex-wrap: nowrap; gap: 4px; }
+    .tab-btn {
+      flex-direction: column; justify-content: center; gap: 3px;
+      padding: 8px 2px; text-align: center; font-size: 10px; line-height: 1.2;
+      min-width: 0; width: 100%;
+    }
+    .tab-btn i { font-size: 18px; width: auto; }
+    .tab-btn:hover { transform: none; }
+    .tab-btn.active { border-left-width: 1px; padding-left: 2px; }
+
+    .sidebar-section-label { font-size: 9px; text-align: center; padding: 8px 0 2px; letter-spacing: 0.3px; }
+    .sidebar-section-label:not(:first-child)::before { margin: 2px 0 8px; }
+
+    .sidebar-footer { margin-top: 10px; padding-top: 10px; }
+    .sidebar-footer .header-user { flex-direction: column; gap: 4px; font-size: 9px; }
+    .header-user span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-user button { font-size: 11px; }
+
+    .main-content { padding: 16px 12px 60px; }
+
+    /* 16px mencegah iPhone melakukan auto-zoom saat kolom isian disentuh */
+    select, input[type="text"], input[type="date"], input[type="number"],
+    input[type="email"], input[type="password"] { font-size: 16px; padding: 10px; }
+
+    .form-row-2 { gap: 8px; }
+    .kal-grid { gap: 3px; }
+    .kal-cell { min-height: 64px; padding: 3px; }
+    .kal-tgl-num { font-size: 11px; }
+    .kal-entri { font-size: 9px; }
+    .kal-bulan-label { font-size: 14px; }
+    .kal-nav button { padding: 8px 12px; }
+    .card { padding: 12px; }
+    #toastContainer { right: 10px; bottom: 10px; }
   }
 
   /* =========================================================
