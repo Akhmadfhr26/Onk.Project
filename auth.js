@@ -1,4 +1,4 @@
- sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+var sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 // =====================================================================
 // AUTH
@@ -7,7 +7,7 @@
 // Tambahkan baris baru di sini kalau mau bikin ID pendek yang lain.
 // (Kalau ID yang diketik mengandung "@", sistem akan langsung memakainya
 // sebagai email apa adanya, jadi tidak wajib didaftarkan di sini dulu.)
- LOGIN_ID_MAP = {
+var LOGIN_ID_MAP = {
   'depo': 'depo@klinik.local',
   'kemo': 'perawat@klinik.local',
   'fahri': 'admin@klinik.local',
@@ -21,8 +21,8 @@
 };
 
 function handleLogin() {
-   idInput = document.getElementById('loginEmail').value.trim();
-   password = document.getElementById('loginPassword').value;
+  var idInput = document.getElementById('loginEmail').value.trim();
+  var password = document.getElementById('loginPassword').value;
   var errEl = document.getElementById('loginError');
   errEl.textContent = '';
   if (!idInput || !password) { errEl.textContent = 'Isi ID dan kata sandi.'; return; }
@@ -70,8 +70,8 @@ function handleLogout() {
 //                    menyetujui/menolak input dari perawat_ruangan.
 // admin           : semua tab di atas sekaligus.
 // =====================================================================
- NURSE_ROLES = ['perawat', 'perawat_ruangan', 'perawat_kemo'];
- TAB_ROLES = {
+var NURSE_ROLES = ['perawat', 'perawat_ruangan', 'perawat_kemo'];
+var TAB_ROLES = {
   kalender: ['depo', 'admin'],
   rentang: ['depo', 'admin'],
   riwayat: ['depo', 'admin'],
@@ -89,21 +89,21 @@ function handleLogout() {
 
 function applyRoleUI(role) {
   Object.keys(TAB_ROLES).forEach(function (t) {
-     btn = document.getElementById('tabBtn' + capitalize(t));
+    var btn = document.getElementById('tabBtn' + capitalize(t));
     if (btn) btn.style.display = (TAB_ROLES[t].indexOf(role) !== -1) ? '' : 'none';
   });
-   lblFarmasi = document.getElementById('sidebarLabelFarmasi');
-   lblPerawat = document.getElementById('sidebarLabelPerawat');
+  var lblFarmasi = document.getElementById('sidebarLabelFarmasi');
+  var lblPerawat = document.getElementById('sidebarLabelPerawat');
   if (lblFarmasi) lblFarmasi.style.display = (role === 'depo' || role === 'admin') ? '' : 'none';
   if (lblPerawat) lblPerawat.style.display = (NURSE_ROLES.indexOf(role) !== -1 || role === 'admin') ? '' : 'none';
 
   // Catatan khusus untuk perawat_ruangan: input mereka butuh verifikasi
   // dulu sebelum tampil di kalender. Elemen-elemen ini opsional di
   // index.html (dicek dulu supaya tidak error kalau belum ada).
-   isRuangan = (role === 'perawat_ruangan');
-   catatanTambah = document.getElementById('tambahPerawatCatatanRuangan');
+  var isRuangan = (role === 'perawat_ruangan');
+  var catatanTambah = document.getElementById('tambahPerawatCatatanRuangan');
   if (catatanTambah) catatanTambah.style.display = isRuangan ? 'block' : 'none';
-   catatanRiwayat = document.getElementById('riwayatPerawatCatatanRuangan');
+  var catatanRiwayat = document.getElementById('riwayatPerawatCatatanRuangan');
   if (catatanRiwayat) catatanRiwayat.style.display = isRuangan ? 'block' : 'none';
 }
 
@@ -125,13 +125,14 @@ function showApp(user) {
     tanggalAktif = new Date();
     nurseTanggalAktif = new Date();
     document.getElementById('kalTanggalJump').value = toIsoDate(tanggalAktif);
-     kalPerawatJump = document.getElementById('kalPerawatTanggalJump');
+    var kalPerawatJump = document.getElementById('kalPerawatTanggalJump');
     if (kalPerawatJump) kalPerawatJump.value = toIsoDate(nurseTanggalAktif);
 
     if (NURSE_ROLES.indexOf(currentUserRole) !== -1) {
       switchTab('kalenderPerawat');
     } else {
-      switchTab('kalender');
+      // depo & admin: tampilan pertama setelah login = Dashboard
+      switchTab('dashboard');
     }
   });
 }
@@ -140,18 +141,18 @@ function showApp(user) {
 // Tab switching (menangani tab farmasi + tab perawat)
 // =====================================================================
 function switchTab(nama) {
-   tabs = Object.keys(TAB_ROLES);
+  var tabs = Object.keys(TAB_ROLES);
   tabs.forEach(function (t) {
-     contentEl = document.getElementById('tab' + capitalize(t));
-     btnEl = document.getElementById('tabBtn' + capitalize(t));
+    var contentEl = document.getElementById('tab' + capitalize(t));
+    var btnEl = document.getElementById('tabBtn' + capitalize(t));
     if (contentEl) contentEl.style.display = (nama === t) ? 'block' : 'none';
     if (btnEl) btnEl.classList.toggle('active', nama === t);
   });
 
   if (nama === 'rentang') {
     if (!document.getElementById('rentangMulai').value) {
-       hariIni = new Date();
-       seminggu = new Date();
+      var hariIni = new Date();
+      var seminggu = new Date();
       seminggu.setDate(seminggu.getDate() - 6);
       document.getElementById('rentangMulai').value = toIsoDate(seminggu);
       document.getElementById('rentangAkhir').value = toIsoDate(hariIni);
